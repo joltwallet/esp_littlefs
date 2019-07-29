@@ -1,0 +1,51 @@
+menu "LittleFS"
+
+    config LITTLEFS_MAX_PARTITIONS
+        int "Maximum Number of Partitions"
+        default 3
+        range 1 10
+        help
+            Define maximum number of partitions that can be mounted.
+
+    config LITTLEFS_PAGE_SIZE
+        int "SPIFFS logical page size"
+        default 256
+        range 256 1024
+        help
+            Logical page size of LITTLEFS partition, in bytes. Must be multiple
+            of flash page size (which is usually 256 bytes).
+            Larger page sizes reduce overhead when storing large files, and
+            improve filesystem performance when reading large files.
+            Smaller page sizes reduce overhead when storing small (< page size)
+            files.
+
+    config LITTLEFS_OBJ_NAME_LEN
+        int "Maximum object name length including NULL terminator."
+        default 64
+        range 16 1024
+        help
+            Includes NULL-terminator.
+
+    config LITTLEFS_READ_SIZE
+        int "Minimum size of a block read."
+        default 128
+        help
+            Minimum size of a block read. All read operations will be a
+            multiple of this value.
+
+    config LITTLEFS_WRITE_SIZE
+        int "Minimum size of a block write."
+        default 128
+        help
+            Minimum size of a block program. All program operations will be a
+            multiple of this value.
+
+
+    config LITTLEFS_USE_MTIME 
+        bool "Save file modification time"
+        default "n"
+        help
+            Modification time is updated when the file is opened.
+            NOT YET IMPLEMENTED.
+
+endmenu
