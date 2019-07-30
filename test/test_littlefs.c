@@ -120,7 +120,8 @@ TEST_CASE("overwrite and append file", "[littlefs]")
 TEST_CASE("can lseek", "[littlefs]")
 {
     test_setup();
-    test_littlefs_lseek("/littlefs/seek.txt");
+    //test_littlefs_lseek("/littlefs/seek.txt");
+    assert(0); // TODO
     test_teardown();
 }
 
@@ -128,42 +129,48 @@ TEST_CASE("can lseek", "[littlefs]")
 TEST_CASE("stat returns correct values", "[littlefs]")
 {
     test_setup();
-    test_littlefs_stat("/littlefs/stat.txt");
+    //test_littlefs_stat("/littlefs/stat.txt");
+    assert(0); // TODO
     test_teardown();
 }
 
 TEST_CASE("unlink removes a file", "[littlefs]")
 {
     test_setup();
-    test_littlefs_unlink("/littlefs/unlink.txt");
+    //test_littlefs_unlink("/littlefs/unlink.txt");
+    assert(0); // TODO
     test_teardown();
 }
 
 TEST_CASE("rename moves a file", "[littlefs]")
 {
     test_setup();
-    test_littlefs_rename("/littlefs/move");
+    //test_littlefs_rename("/littlefs/move");
+    assert(0); // TODO
     test_teardown();
 }
 
 TEST_CASE("can opendir root directory of FS", "[littlefs]")
 {
     test_setup();
-    test_littlefs_can_opendir("/littlefs");
+    //test_littlefs_can_opendir("/littlefs");
+    assert(0); // TODO
     test_teardown();
 }
 
 TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
 {
     test_setup();
-    test_littlefs_opendir_readdir_rewinddir("/littlefs/dir");
+    //test_littlefs_opendir_readdir_rewinddir("/littlefs/dir");
+    assert(0); // TODO
     test_teardown();
 }
 
 TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
 {
     test_setup();
-    test_littlefs_readdir_many_files("/littlefs/dir2");
+    //test_littlefs_readdir_many_files("/littlefs/dir2");
+    assert(0); // TODO
     test_teardown();
 }
 
