@@ -40,12 +40,25 @@ menu "LittleFS"
             Minimum size of a block program. All program operations will be a
             multiple of this value.
 
-
-    config LITTLEFS_USE_MTIME 
-        bool "Save file modification time"
-        default "n"
+    config LITTLEFS_LOOKAHEAD_SIZE
+        int "Look ahead size."
+        default 128
         help
-            Modification time is updated when the file is opened.
-            NOT YET IMPLEMENTED.
+            Look ahead size. Must be a multiple of 8.
+
+    config LITTLEFS_CACHE_SIZE
+        int "Cache Size"
+        default 128
+        help
+            MUST be a multiple of Read AND Write size. MUST be a factor of 4096.
+
+    config LITTLEFS_BLOCK_CYCLES
+        int "LittleFS wear-leveling block cycles"
+        default 512
+        range -1 1024
+        help
+            Suggested values are in the range 100-1000, with large values having 
+            better performance at the cost of less consistent wear distribution. 
+            -1 disables wear-leveling.
 
 endmenu

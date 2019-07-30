@@ -25,6 +25,7 @@
 static const char TAG[] = "esp_littlefs";
 
 #define ABSOLUTE_MAX_NUM_FILES 16
+#define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
 /**
  * @brief littlefs DIR structure
@@ -124,11 +125,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .telldir_p   = &vfs_littlefs_telldir,
         .mkdir_p     = &vfs_littlefs_mkdir,
         .rmdir_p     = &vfs_littlefs_rmdir,
-#ifdef CONFIG_LITTLEFS_USE_MTIME
-        .utime_p = &vfs_littlefs_utime,
-#else
         .utime_p = NULL,
-#endif // CONFIG_LITTLEFS_USE_MTIME
     };
 
     esp_err_t err = esp_littlefs_init(conf);
@@ -329,6 +326,7 @@ static esp_err_t esp_littlefs_get_empty(int *index) {
     for(uint8_t i=0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++){
         if( _efs[i] == NULL ){
             *index = i;
+            return ESP_OK;
         }
     }
     ESP_LOGE(TAG, "No more free partitions available.");
@@ -416,7 +414,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             conf->partition_label);
 
     if (!partition) {
-        ESP_LOGE(TAG, "littlefs partition could not be found");
+        ESP_LOGE(TAG, "partition \"%s\" could not be found", conf->partition_label);
         err = ESP_ERR_NOT_FOUND;
         goto exit;
     }
@@ -450,10 +448,11 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         // block device configuration
         efs->cfg.read_size = CONFIG_LITTLEFS_READ_SIZE;
         efs->cfg.prog_size = CONFIG_LITTLEFS_WRITE_SIZE;
-        efs->cfg.block_size = 4096; /* ESP32 can only operate at 4kb */
+        efs->cfg.block_size = CONFIG_LITTLEFS_BLOCK_SIZE;; 
         efs->cfg.block_count = efs->partition->size / efs->cfg.block_size;
-        efs->cfg.cache_size = 16; // TODO tweak
-        efs->cfg.lookahead_size = 128; // TODO tweak
+        efs->cfg.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
+        efs->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
+        efs->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     }
 
     efs->lock = xSemaphoreCreateRecursiveMutex();
@@ -463,13 +462,12 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         goto exit;
     }
 
-    efs->fs = malloc(sizeof(lfs_t));
+    efs->fs = calloc(1, sizeof(lfs_t));
     if (efs->fs == NULL) {
         ESP_LOGE(TAG, "littlefs could not be malloced");
         err = ESP_ERR_NO_MEM;
         goto exit;
     }
-    memset(efs->fs, 0, sizeof(lfs_t));
 
     efs->files = calloc(conf->max_files, sizeof(vfs_littlefs_file_t));
     if( efs->files == NULL ){

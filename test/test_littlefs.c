@@ -19,7 +19,7 @@
 #include "esp_partition.h"
 
 
-static const char littlefs_test_partition_label[] = "littlefs_store";
+static const char littlefs_test_partition_label[] = "flash_test";
 const char* littlefs_test_hello_str = "Hello, World!\n";
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text);
@@ -31,6 +31,7 @@ static void test_teardown();
 
 TEST_CASE("can initialize LittleFS in erased partition", "[littlefs]")
 {
+    /* Gets the partition labeled "flash_test" */
     const esp_partition_t* part = get_test_data_partition();
     TEST_ASSERT_NOT_NULL(part);
     TEST_ESP_OK(esp_partition_erase_range(part, 0, part->size));
