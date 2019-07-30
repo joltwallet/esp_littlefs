@@ -2,7 +2,7 @@ LittleFS for ESP-IDF.
 
 # What is LittleFS?
 
-[Littlefs](https://github.com/ARMmbed/littlefs) is a small fail-safe filesystem 
+[LittleFS](https://github.com/ARMmbed/littlefs) is a small fail-safe filesystem 
 for microcontrollers. We ported LittleFS to esp-idf (specifically, the ESP32) 
 because SPIFFS was too slow, and FAT was too fragile.
 

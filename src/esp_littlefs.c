@@ -148,17 +148,22 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         return err;
     }
 
+    ESP_LOGD(TAG, "Successfully registered LittleFS to \"%s\"", conf->base_path);
     return ESP_OK;
 }
 
 esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
 {
+    assert(partition_label);
     int index;
     if (esp_littlefs_by_label(partition_label, &index) != ESP_OK) {
+        ESP_LOGE(TAG, "Partition was never registered.");
         return ESP_ERR_INVALID_STATE;
     }
+    ESP_LOGD(TAG, "Unregistering \"%s\"", partition_label);
     esp_err_t err = esp_vfs_unregister(_efs[index]->base_path);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to unregister \"%s\"", partition_label);
         return err;
     }
     esp_littlefs_free(&_efs[index]);
@@ -314,20 +319,20 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
 
     if(!label || !index) return ESP_ERR_INVALID_ARG;
 
-    ESP_LOGD(TAG, "Searching for \"%s\"", label);
+    ESP_LOGD(TAG, "Searching for existing filesystem for partition \"%s\"", label);
 
     for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
         p = _efs[i];
         if (p) {
             if (strncmp(label, p->partition->label, 17) == 0) {
                 *index = i;
-                ESP_LOGD(TAG, "Found \"%s\" at index %d", label, *index);
+                ESP_LOGD(TAG, "Found existing filesystem \"%s\" at index %d", label, *index);
                 return ESP_OK;
             }
         }
     }
 
-    ESP_LOGD(TAG, "\%s\" not found", label);
+    ESP_LOGD(TAG, "Existing filesystem \%s\" not found", label);
     return ESP_ERR_NOT_FOUND;
 }
 
@@ -412,8 +417,8 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         }
     }
 
-    if(conf->max_files > ABSOLUTE_MAX_NUM_FILES) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
+    if(conf->max_files > ABSOLUTE_MAX_NUM_FILES || conf->max_files <= 0) {
+        ESP_LOGE(TAG, "Max files must be in range (0, %d].", ABSOLUTE_MAX_NUM_FILES);
         err = ESP_ERR_INVALID_ARG;
         goto exit;
     }
@@ -450,6 +455,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         goto exit;
     }
     efs->partition = partition;
+    efs->max_files = conf->max_files;
 
     { /* LittleFS Configuration */
         efs->cfg.context = efs;
@@ -549,6 +555,8 @@ static int sem_give(esp_littlefs_t *efs) {
  */
 static int esp_littlefs_get_fd(esp_littlefs_t *efs){
     sem_take(efs);
+    ESP_LOGD(TAG, "Searching for a free FD [0,%d]. Curred fd_used mask: %08X",
+            efs->max_files, (uint32_t)efs->fd_used);
     for(uint8_t i=0; i < efs->max_files; i++){
         bool used;
         used = (efs->fd_used >> i) & 1;
