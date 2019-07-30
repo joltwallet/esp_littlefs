@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-#define ESP_LOCAL_LOG_LEVEL ESP_LOG_INFO
+#define ESP_LOCAL_LOG_LEVEL ESP_LOG_DEBUG
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -97,7 +97,7 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, si
     efs = _efs[index];
 
     if(total_bytes) *total_bytes = efs->cfg.block_size * efs->cfg.block_count; 
-    if(used_bytes) *used_bytes = lfs_fs_size(efs->fs);
+    if(used_bytes) *used_bytes = efs->cfg.block_size * lfs_fs_size(efs->fs);
 
     return ESP_OK;
 }
@@ -130,18 +130,21 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 
     esp_err_t err = esp_littlefs_init(conf);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LittleFS");
         return err;
     }
 
     int index;
     if (esp_littlefs_by_label(conf->partition_label, &index) != ESP_OK) {
-        return ESP_ERR_INVALID_STATE;
+        ESP_LOGE(TAG, "Unable to find partition \"%s\"", conf->partition_label);
+        return ESP_ERR_NOT_FOUND;
     }
 
     strlcat(_efs[index]->base_path, conf->base_path, ESP_VFS_PATH_MAX + 1);
     err = esp_vfs_register(conf->base_path, &vfs, _efs[index]);
     if (err != ESP_OK) {
         esp_littlefs_free(&_efs[index]);
+        ESP_LOGE(TAG, "Failed to register Littlefs to \"%s\"", conf->base_path);
         return err;
     }
 
@@ -168,6 +171,8 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
     esp_err_t err;
     esp_littlefs_t *efs = NULL;
 
+    ESP_LOGI(TAG, "Formatting \"%s\"", partition_label);
+
     /* Check and unmount partition if mounted */
     {
         int index;
@@ -177,6 +182,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
 
     if (err == ESP_OK && efs != NULL && efs->mounted) {
         /* Partition mounted */
+        ESP_LOGD(TAG, "Partition was mounted. Unmounting...");
         was_mounted = true;
         res = lfs_unmount(efs->fs);
         if(res == LFS_ERR_OK){
@@ -190,15 +196,17 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
     else {
         /* Partition not mounted */
         /* Do Nothing */
+        ESP_LOGD(TAG, "Partition was not mounted.");
     }
 
     /* Erase Partition */
     {
+        ESP_LOGD(TAG, "Erasing partition...");
         const esp_partition_t* partition = esp_partition_find_first(
                 ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
                 partition_label);
         if (!partition) {
-            ESP_LOGE(TAG, "littlefs partition could not be found");
+            ESP_LOGE(TAG, "partition \"%s\" could not be found", partition_label);
             return ESP_ERR_NOT_FOUND;
         }
         err = esp_partition_erase_range(partition, 0, partition->size);
@@ -221,12 +229,14 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
     /* Mount filesystem */
     if( was_mounted ) {
         /* Remount the partition */
+        ESP_LOGD(TAG, "Remounting formatted partition");
         res = lfs_mount(efs->fs, &efs->cfg);
         if( res != LFS_ERR_OK ) {
             ESP_LOGE(TAG, "Failed to re-mount filesystem");
             return ESP_FAIL;
         }
     }
+    ESP_LOGD(TAG, "Format Success!");
 
     return ESP_OK;
 }
@@ -304,15 +314,20 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
 
     if(!label || !index) return ESP_ERR_INVALID_ARG;
 
+    ESP_LOGD(TAG, "Searching for \"%s\"", label);
+
     for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
         p = _efs[i];
         if (p) {
             if (strncmp(label, p->partition->label, 17) == 0) {
                 *index = i;
+                ESP_LOGD(TAG, "Found \"%s\" at index %d", label, *index);
                 return ESP_OK;
             }
         }
     }
+
+    ESP_LOGD(TAG, "\%s\" not found", label);
     return ESP_ERR_NOT_FOUND;
 }
 
@@ -501,6 +516,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
     }
 
     efs->mounted = true;
+    err = ESP_OK;
 
 exit:
     if(err != ESP_OK){

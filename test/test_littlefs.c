@@ -39,7 +39,7 @@ TEST_CASE("can initialize LittleFS in erased partition", "[littlefs]")
     size_t total = 0, used = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
     printf("total: %d, used: %d\n", total, used);
-    TEST_ASSERT_EQUAL(0, used);
+    TEST_ASSERT_EQUAL(8192, used); // 2 blocks are used on a fresh filesystem
     test_teardown();
 }
 
