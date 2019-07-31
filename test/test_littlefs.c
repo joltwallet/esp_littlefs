@@ -20,12 +20,14 @@
 
 
 static const char littlefs_test_partition_label[] = "flash_test";
-const char* littlefs_test_hello_str = "Hello, World!\n";
+static const char littlefs_test_hello_str[] = "Hello, World!\n";
+#define littlefs_base_path "/littlefs"
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text);
 static void test_littlefs_overwrite_append(const char* filename);
 void test_littlefs_read_file(const char* filename);
 void test_littlefs_readdir_many_files(const char* dir_prefix);
+static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count);
 static void test_setup();
 static void test_teardown();
 
@@ -49,7 +51,7 @@ TEST_CASE("can format mounted partition", "[littlefs]")
     const esp_partition_t* part = get_test_data_partition();
     TEST_ASSERT_NOT_NULL(part);
     test_setup();
-    const char* filename = "/littlefs/hello.txt";
+    const char* filename = littlefs_base_path "/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     printf("Deleting \"%s\" via formatting fs.\n", filename);
     esp_littlefs_format(part->label);
@@ -66,14 +68,14 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     TEST_ASSERT_NOT_NULL(part);
 
     test_setup();
-    const char* filename = "/littlefs/hello.txt";
+    const char* filename = littlefs_base_path "/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     test_teardown();
 
     esp_littlefs_format(part->label);
     // Don't use test_setup here, need to mount without formatting
     esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/littlefs",
+        .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .max_files = 5,
         .format_if_mount_failed = false
@@ -81,7 +83,6 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
 
     FILE* f = fopen(filename, "r");
-    //test_littlefs_read_file(filename);
     TEST_ASSERT_NULL(f);
     test_teardown();
 }
@@ -89,44 +90,43 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
 TEST_CASE("can create and write file", "[littlefs]")
 {
     test_setup();
-    test_littlefs_create_file_with_text("/littlefs/hello.txt", littlefs_test_hello_str);
+    test_littlefs_create_file_with_text(littlefs_base_path "/hello.txt", littlefs_test_hello_str);
     test_teardown();
 }
 
 TEST_CASE("can read file", "[littlefs]")
 {
     test_setup();
-    test_littlefs_create_file_with_text("/littlefs/hello.txt", littlefs_test_hello_str);
-    test_littlefs_read_file("/littlefs/hello.txt");
+    test_littlefs_create_file_with_text(littlefs_base_path "/hello.txt", littlefs_test_hello_str);
+    test_littlefs_read_file(littlefs_base_path "/hello.txt");
     test_teardown();
 }
 
 TEST_CASE("can open maximum number of files", "[littlefs]")
 {
     size_t max_files = FOPEN_MAX - 3; /* account for stdin, stdout, stderr */
-    esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/little",
+    const esp_vfs_littlefs_conf_t conf = {
+        .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .format_if_mount_failed = true,
         .max_files = max_files
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
-    //test_littlefs_open_max_files("/littlefs/f", max_files);
-    assert(0); // TODO
+    test_littlefs_open_max_files("/littlefs/f", max_files);
     TEST_ESP_OK(esp_vfs_littlefs_unregister(littlefs_test_partition_label));
 }
 
 TEST_CASE("overwrite and append file", "[littlefs]")
 {
     test_setup();
-    test_littlefs_overwrite_append("/littlefs/hello.txt");
+    test_littlefs_overwrite_append(littlefs_base_path "/hello.txt");
     test_teardown();
 }
 
 TEST_CASE("can lseek", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_lseek("/littlefs/seek.txt");
+    //test_littlefs_lseek(littlefs_base_path "/seek.txt");
     assert(0); // TODO
     test_teardown();
 }
@@ -135,7 +135,7 @@ TEST_CASE("can lseek", "[littlefs]")
 TEST_CASE("stat returns correct values", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_stat("/littlefs/stat.txt");
+    //test_littlefs_stat(littlefs_base_path "/stat.txt");
     assert(0); // TODO
     test_teardown();
 }
@@ -143,7 +143,7 @@ TEST_CASE("stat returns correct values", "[littlefs]")
 TEST_CASE("unlink removes a file", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_unlink("/littlefs/unlink.txt");
+    //test_littlefs_unlink(littlefs_base_path "/unlink.txt");
     assert(0); // TODO
     test_teardown();
 }
@@ -151,7 +151,7 @@ TEST_CASE("unlink removes a file", "[littlefs]")
 TEST_CASE("rename moves a file", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_rename("/littlefs/move");
+    //test_littlefs_rename(littlefs_base_path "/move");
     assert(0); // TODO
     test_teardown();
 }
@@ -159,7 +159,7 @@ TEST_CASE("rename moves a file", "[littlefs]")
 TEST_CASE("can opendir root directory of FS", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_can_opendir("/littlefs");
+    //test_littlefs_can_opendir(littlefs_base_path );
     assert(0); // TODO
     test_teardown();
 }
@@ -167,7 +167,7 @@ TEST_CASE("can opendir root directory of FS", "[littlefs]")
 TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_opendir_readdir_rewinddir("/littlefs/dir");
+    //test_littlefs_opendir_readdir_rewinddir(littlefs_base_path "/dir");
     assert(0); // TODO
     test_teardown();
 }
@@ -175,7 +175,7 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
 TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
 {
     test_setup();
-    //test_littlefs_readdir_many_files("/littlefs/dir2");
+    //test_littlefs_readdir_many_files(littlefs_base_path "/dir2");
     assert(0); // TODO
     test_teardown();
 }
@@ -183,7 +183,7 @@ TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
 TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_concurrent("/littlefs/f");
+    //test_littlefs_concurrent(littlefs_base_path "/f");
     assert(0); // TODO
     test_teardown();
 }
@@ -303,9 +303,26 @@ void test_littlefs_readdir_many_files(const char* dir_prefix)
     }
 }
 
+static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count)
+{
+    FILE** files = calloc(files_count, sizeof(FILE*));
+    for (size_t i = 0; i < files_count; ++i) {
+        char name[32];
+        snprintf(name, sizeof(name), "%s_%d.txt", filename_prefix, i);
+        printf("Opening \"%s\"\n", name);
+        files[i] = fopen(name, "w");
+        TEST_ASSERT_NOT_NULL(files[i]);
+    }
+    /* close everything and clean up */
+    for (size_t i = 0; i < files_count; ++i) {
+        fclose(files[i]);
+    }
+    free(files);
+}
+
 static void test_setup() {
     esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/littlefs",
+        .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .max_files = 5,
         .format_if_mount_failed = true

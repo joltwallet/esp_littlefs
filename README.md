@@ -25,9 +25,9 @@ Also see the comments in `include/esp_littlefs.h`
 
 # Limitations
 
-Currently only an absolute maximum of *16* files can be opened at once. This can be
-increased by changing the `esp_littlefs_t.fd_used` bitmask to a larger datatype, 
-like a `uint16_t`. 
+Currently only an absolute maximum of *20* files can be opened at once. This can be
+increased by increasing the `esp_littlefs_t.fd_used` bitmask to a larger datatype, 
+and changing `ABSOLUTE_MAX_NUM_FILES`. 
 
 # Tips, Tricks, and Gotchas
 

@@ -29,9 +29,9 @@ typedef struct {
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
     struct lfs_config cfg;                    /*!< littlefs Mount configuration */
     vfs_littlefs_file_t *files;               /*!< Array of files */
-    uint16_t fd_used;                         /*!< */
-    uint8_t max_files;                        /*!< Maximum number of file descriptors */
-    uint8_t mounted:1;                        /*!< littlefs is mounted */
+    uint32_t fd_used:20;                      /*!< Mask of used file descriptors */
+    uint32_t max_files:7;                     /*!< Maximum number of file descriptors */
+    uint32_t mounted:1;                       /*!< littlefs is mounted */
 } esp_littlefs_t;
 
 /**

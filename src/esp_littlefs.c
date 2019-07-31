@@ -24,7 +24,7 @@
 
 static const char TAG[] = "esp_littlefs";
 
-#define ABSOLUTE_MAX_NUM_FILES 16
+#define ABSOLUTE_MAX_NUM_FILES 20
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
 /**
@@ -450,7 +450,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
     }
 
     if(conf->max_files > ABSOLUTE_MAX_NUM_FILES || conf->max_files <= 0) {
-        ESP_LOGE(TAG, "Max files must be in range (0, %d].", ABSOLUTE_MAX_NUM_FILES);
+        ESP_LOGE(TAG, "Max files must be in range (0, %d]. Provided %d", ABSOLUTE_MAX_NUM_FILES, conf->max_files);
         err = ESP_ERR_INVALID_ARG;
         goto exit;
     }
@@ -646,6 +646,8 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     vfs_littlefs_file_t *file = NULL;
 
     assert(path);
+
+    ESP_LOGD(TAG, "Opening %s", path);
 
     /* Convert flags to lfs flags */
     lfs_flags = esp_littlefs_flags_conv(flags);
