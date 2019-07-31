@@ -58,6 +58,7 @@ static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
+static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void esp_littlefs_free(esp_littlefs_t ** efs);
@@ -172,58 +173,59 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
 
 esp_err_t esp_littlefs_format(const char* partition_label) {
     bool was_mounted = false;
-    int res;
+    bool efs_free = false;
+    int index = -1;
     esp_err_t err;
     esp_littlefs_t *efs = NULL;
 
     ESP_LOGI(TAG, "Formatting \"%s\"", partition_label);
 
-    /* Check and unmount partition if mounted */
-    {
-        int index;
+    /* Get a context */
+    err = esp_littlefs_by_label(partition_label, &index);
+
+    if( err != ESP_OK ){
+        /* Create a tmp context */
+        efs_free = true;
+        const esp_vfs_littlefs_conf_t conf = {
+                /* base_name not necessary for initializing */
+                .dont_mount = true, 
+                .partition_label = partition_label,
+                .max_files = 1
+        };
+        err = esp_littlefs_init(&conf); /* Internally MIGHT esp_littlefs_format */
+        if( err != ESP_OK ) {
+            ESP_LOGE(TAG, "Failed to initialize to format.");
+            goto exit;
+        }
+
         err = esp_littlefs_by_label(partition_label, &index);
-        if (err == ESP_OK) efs = _efs[index];
+        if ( err != ESP_OK) {
+            ESP_LOGE(TAG, "Error obtaining context.");
+            goto exit;
+        }
     }
 
-    if (err == ESP_OK && efs != NULL && efs->mounted) {
-        /* Partition mounted */
+    efs = _efs[index];
+    assert( efs );
+
+    /* Unmount if mounted */
+    if(efs->mounted){
+        int res;
         ESP_LOGD(TAG, "Partition was mounted. Unmounting...");
         was_mounted = true;
         res = lfs_unmount(efs->fs);
-        if(res == LFS_ERR_OK){
-            efs->mounted = false;
-        }
-        else{
+        if(res != LFS_ERR_OK){
             ESP_LOGE(TAG, "Failed to unmount.");
             return ESP_FAIL;
         }
-    }
-    else {
-        /* Partition not mounted */
-        /* Do Nothing */
-        ESP_LOGD(TAG, "Partition was not mounted.");
+        efs->mounted = false;
     }
 
-    /* Erase Partition */
+    /* Erase and Format */
     {
-        ESP_LOGD(TAG, "Erasing partition...");
-        const esp_partition_t* partition = esp_partition_find_first(
-                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
-                partition_label);
-        if (!partition) {
-            ESP_LOGE(TAG, "partition \"%s\" could not be found", partition_label);
-            return ESP_ERR_NOT_FOUND;
-        }
-        err = esp_partition_erase_range(partition, 0, partition->size);
-        if( err != ESP_OK ) {
-            ESP_LOGE(TAG, "Failed to erase partition");
-            return ESP_FAIL;
-        }
-    }
-
-    /* Format */
-    if( efs != NULL ) {
+        int res;
         ESP_LOGD(TAG, "Formatting filesystem");
+        esp_littlefs_erase_partition(partition_label);
         res = lfs_format(efs->fs, &efs->cfg);
         if( res != LFS_ERR_OK ) {
             ESP_LOGE(TAG, "Failed to format filesystem");
@@ -233,6 +235,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
 
     /* Mount filesystem */
     if( was_mounted ) {
+        int res;
         /* Remount the partition */
         ESP_LOGD(TAG, "Remounting formatted partition");
         res = lfs_mount(efs->fs, &efs->cfg);
@@ -242,8 +245,12 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
         }
     }
     ESP_LOGD(TAG, "Format Success!");
+    
+    err = ESP_OK;
 
-    return ESP_OK;
+exit:
+    if(efs_free && index>=0) esp_littlefs_free(&_efs[index]);
+    return err;
 }
 
 /**
@@ -286,7 +293,7 @@ const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
 static void esp_littlefs_free(esp_littlefs_t ** efs)
 {
     esp_littlefs_t * e = *efs;
-    if (*efs == NULL) return;
+    if (e == NULL) return;
     *efs = NULL;
 
     if (e->fs) {
@@ -354,6 +361,30 @@ static esp_err_t esp_littlefs_get_empty(int *index) {
 }
 
 /**
+ * @brief erase a partition; make sure LittleFS is unmounted first.
+ * @param partition_label NULL-terminated string of partition to erase
+ * @return ESP_OK on success
+ */
+static esp_err_t esp_littlefs_erase_partition(const char *partition_label) {
+    ESP_LOGD(TAG, "Erasing partition...");
+
+    const esp_partition_t* partition = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
+            partition_label);
+    if (!partition) {
+        ESP_LOGE(TAG, "partition \"%s\" could not be found", partition_label);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if( esp_partition_erase_range(partition, 0, partition->size) != ESP_OK ) {
+        ESP_LOGE(TAG, "Failed to erase partition");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+/**
  * @brief Convert fcntl flags to littlefs flags
  * @param m fcntl flags
  * @return lfs flags
@@ -402,6 +433,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
 
     /* Input and Environment Validation */
     if (esp_littlefs_by_label(conf->partition_label, &index) == ESP_OK) {
+        ESP_LOGE(TAG, "Partition already used");
         err = ESP_ERR_INVALID_STATE;
         goto exit;
     }
@@ -499,7 +531,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
 
     // Mount and Error Check
     _efs[index] = efs;
-    {
+    if(!conf->dont_mount){
         int res;
         res = lfs_mount(efs->fs, &efs->cfg);
 
@@ -519,14 +551,19 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             err = ESP_FAIL;
             goto exit;
         }
+        efs->mounted = true;
     }
 
-    efs->mounted = true;
     err = ESP_OK;
 
 exit:
     if(err != ESP_OK){
-        esp_littlefs_free(&efs);
+        if( index >= 0 ) {
+            esp_littlefs_free(&_efs[index]);
+        }
+        else{
+            esp_littlefs_free(&efs);
+        }
     }
     xSemaphoreGive(_efs_lock);
     return err;
@@ -555,7 +592,7 @@ static int sem_give(esp_littlefs_t *efs) {
  */
 static int esp_littlefs_get_fd(esp_littlefs_t *efs){
     sem_take(efs);
-    ESP_LOGD(TAG, "Searching for a free FD [0,%d]. Curred fd_used mask: %08X",
+    ESP_LOGD(TAG, "Searching for a free FD [0,%d). fd_used mask: 0x%08X",
             efs->max_files, (uint32_t)efs->fd_used);
     for(uint8_t i=0; i < efs->max_files; i++){
         bool used;
@@ -563,6 +600,8 @@ static int esp_littlefs_get_fd(esp_littlefs_t *efs){
         if( !used ){
             efs->fd_used |= 1 << i;
             sem_give(efs);
+            ESP_LOGD(TAG, "Obtained free FD %d. fd_used mask: 0x%08x",
+                    i, (uint32_t)efs->fd_used);
             return i;
         }
     }
@@ -672,7 +711,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
     vfs_littlefs_file_t *file = NULL;
 
     if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
+        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
         return LFS_ERR_BADF;
     }
 
@@ -696,21 +735,21 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     vfs_littlefs_file_t *file = NULL;
 
     if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
+        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
         return LFS_ERR_BADF;
     }
 
     sem_take(efs);
     file = &efs->files[fd];
     res = lfs_file_close(efs->fs, &file->file);
-    sem_give(efs);
-
     if(res < 0){
+        sem_give(efs);
         ESP_LOGE(TAG, "Failed to close file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
         return res;
     }
-
+    esp_littlefs_free_fd(efs, fd);
+    sem_give(efs);
     return res;
 }
 

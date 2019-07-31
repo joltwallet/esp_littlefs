@@ -51,6 +51,7 @@ TEST_CASE("can format mounted partition", "[littlefs]")
     test_setup();
     const char* filename = "/littlefs/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
+    printf("Deleting \"%s\" via formatting fs.\n", filename);
     esp_littlefs_format(part->label);
     FILE* f = fopen(filename, "r");
     TEST_ASSERT_NULL(f);
@@ -63,10 +64,12 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     // the file does not exist.
     const esp_partition_t* part = get_test_data_partition();
     TEST_ASSERT_NOT_NULL(part);
+
     test_setup();
     const char* filename = "/littlefs/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     test_teardown();
+
     esp_littlefs_format(part->label);
     // Don't use test_setup here, need to mount without formatting
     esp_vfs_littlefs_conf_t conf = {
@@ -76,7 +79,9 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
         .format_if_mount_failed = false
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+
     FILE* f = fopen(filename, "r");
+    //test_littlefs_read_file(filename);
     TEST_ASSERT_NULL(f);
     test_teardown();
 }
@@ -186,6 +191,7 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text)
 {
+    printf("Writing to \"%s\"\n", name);
     FILE* f = fopen(name, "wb");
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_TRUE(fputs(text, f) != EOF);
@@ -305,9 +311,11 @@ static void test_setup() {
         .format_if_mount_failed = true
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+    printf("Test setup complete.\n");
 }
 
 static void test_teardown(){
     TEST_ESP_OK(esp_vfs_littlefs_unregister(littlefs_test_partition_label));
+    printf("Test teardown complete.\n");
 }
 
