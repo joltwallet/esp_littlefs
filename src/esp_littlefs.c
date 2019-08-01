@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-#define ESP_LOCAL_LOG_LEVEL ESP_LOG_DEBUG
+//#define ESP_LOCAL_LOG_LEVEL ESP_LOG_DEBUG
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -172,6 +172,8 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
 }
 
 esp_err_t esp_littlefs_format(const char* partition_label) {
+    assert( partition_label );
+
     bool was_mounted = false;
     bool efs_free = false;
     int index = -1;
@@ -1034,6 +1036,7 @@ static int vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode) {
     /* Note: mode is currently unused */
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     int res;
+    ESP_LOGD(TAG, "mkdir \"%s\"", name);
 
     sem_take(efs);
     res = lfs_mkdir(efs->fs, name);

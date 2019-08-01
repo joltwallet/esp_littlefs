@@ -243,6 +243,39 @@ TEST_CASE("can opendir root directory of FS", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("mkdir, rmdir", "[littlefs]")
+{
+    const char filename_prefix[] = littlefs_base_path "/";
+
+    char name_dir1[64];
+    char name_dir2[64];
+    char name_dir2_file[64];
+
+    snprintf(name_dir1, sizeof(name_dir1), "%s1", filename_prefix);
+    snprintf(name_dir2, sizeof(name_dir2), "%s2", filename_prefix);
+    snprintf(name_dir2_file, sizeof(name_dir2_file), "%s2/1.txt", filename_prefix);
+
+    TEST_ASSERT_EQUAL(0, mkdir(name_dir1, 0755));
+    struct stat st;
+    TEST_ASSERT_EQUAL(0, stat(name_dir1, &st));
+    TEST_ASSERT_TRUE(st.st_mode & S_IFDIR);
+    TEST_ASSERT_FALSE(st.st_mode & S_IFREG);
+    TEST_ASSERT_EQUAL(0, rmdir(name_dir1));
+    TEST_ASSERT_EQUAL(-1, stat(name_dir1, &st));
+
+    TEST_ASSERT_EQUAL(0, mkdir(name_dir2, 0755));
+    test_littlefs_create_file_with_text(name_dir2_file, "foo\n");
+    TEST_ASSERT_EQUAL(0, stat(name_dir2, &st));
+    TEST_ASSERT_TRUE(st.st_mode & S_IFDIR);
+    TEST_ASSERT_FALSE(st.st_mode & S_IFREG);
+    TEST_ASSERT_EQUAL(0, stat(name_dir2_file, &st));
+    TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
+    TEST_ASSERT_TRUE(st.st_mode & S_IFREG);
+    TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
+    TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
+    TEST_ASSERT_EQUAL(0, rmdir(name_dir2));
+}
+
 TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
 {
     test_setup();
@@ -255,11 +288,12 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
     char name_dir_file1[64];
 
     snprintf(name_dir_inner_file, sizeof(name_dir_inner_file), "%s/inner/3.txt", dir_prefix);
-    snprintf(name_dir_inner, sizeof(name_dir_inner), "%s/inner", dir_prefix);
-    snprintf(name_dir_file3, sizeof(name_dir_file2), "%s/boo.bin", dir_prefix);
-    snprintf(name_dir_file2, sizeof(name_dir_file2), "%s/2.txt", dir_prefix);
-    snprintf(name_dir_file1, sizeof(name_dir_file1), "%s/1.txt", dir_prefix);
+    snprintf(name_dir_inner,      sizeof(name_dir_inner),      "%s/inner",       dir_prefix);
+    snprintf(name_dir_file3,      sizeof(name_dir_file2),      "%s/boo.bin",     dir_prefix);
+    snprintf(name_dir_file2,      sizeof(name_dir_file2),      "%s/2.txt",       dir_prefix);
+    snprintf(name_dir_file1,      sizeof(name_dir_file1),      "%s/1.txt",       dir_prefix);
 
+    /* Remove files/dirs that may exist */
     unlink(name_dir_inner_file);
     rmdir(name_dir_inner);
     unlink(name_dir_file1);
@@ -267,6 +301,7 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
     unlink(name_dir_file3);
     rmdir(dir_prefix);
 
+    /* Create the files */
     test_littlefs_create_file_with_text(name_dir_file1, "1\n");
     test_littlefs_create_file_with_text(name_dir_file2, "2\n");
     test_littlefs_create_file_with_text(name_dir_file3, "\01\02\03");
