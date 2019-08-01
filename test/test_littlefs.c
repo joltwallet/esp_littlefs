@@ -25,9 +25,10 @@ static const char littlefs_test_hello_str[] = "Hello, World!\n";
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text);
 static void test_littlefs_overwrite_append(const char* filename);
-void test_littlefs_read_file(const char* filename);
-void test_littlefs_readdir_many_files(const char* dir_prefix);
+static void test_littlefs_read_file(const char* filename);
+static void test_littlefs_readdir_many_files(const char* dir_prefix);
 static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count);
+static void test_littlefs_concurrent(const char* filename_prefix);
 static void test_setup();
 static void test_teardown();
 
@@ -126,8 +127,29 @@ TEST_CASE("overwrite and append file", "[littlefs]")
 TEST_CASE("can lseek", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_lseek(littlefs_base_path "/seek.txt");
-    assert(0); // TODO
+
+    FILE* f = fopen(littlefs_base_path "/seek.txt", "wb+");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(11, fprintf(f, "0123456789\n"));
+    TEST_ASSERT_EQUAL(0, fseek(f, -2, SEEK_CUR));
+    TEST_ASSERT_EQUAL('9', fgetc(f));
+    TEST_ASSERT_EQUAL(0, fseek(f, 3, SEEK_SET));
+    TEST_ASSERT_EQUAL('3', fgetc(f));
+    TEST_ASSERT_EQUAL(0, fseek(f, -3, SEEK_END));
+    TEST_ASSERT_EQUAL('8', fgetc(f));
+    TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
+    TEST_ASSERT_EQUAL(11, ftell(f));
+    TEST_ASSERT_EQUAL(4, fprintf(f, "abc\n"));
+    TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
+    TEST_ASSERT_EQUAL(15, ftell(f));
+    TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_SET));
+    char buf[20];
+    TEST_ASSERT_EQUAL(15, fread(buf, 1, sizeof(buf), f));
+    const char ref_buf[] = "0123456789\nabc\n";
+    TEST_ASSERT_EQUAL_INT8_ARRAY(ref_buf, buf, sizeof(ref_buf) - 1);
+
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
     test_teardown();
 }
 
@@ -135,56 +157,186 @@ TEST_CASE("can lseek", "[littlefs]")
 TEST_CASE("stat returns correct values", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_stat(littlefs_base_path "/stat.txt");
-    assert(0); // TODO
+    const char filename[] = littlefs_base_path "/stat.txt";
+
+    test_littlefs_create_file_with_text(filename, "foo\n");
+    struct stat st;
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
+    TEST_ASSERT(st.st_mode & S_IFREG);
+    TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
+
     test_teardown();
 }
 
 TEST_CASE("unlink removes a file", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_unlink(littlefs_base_path "/unlink.txt");
-    assert(0); // TODO
+
+    const char filename[] = littlefs_base_path "/unlink.txt";
+
+    test_littlefs_create_file_with_text(filename, "unlink\n");
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+    TEST_ASSERT_NULL(fopen(filename, "r"));
+
     test_teardown();
 }
 
 TEST_CASE("rename moves a file", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_rename(littlefs_base_path "/move");
-    assert(0); // TODO
+    const char filename_prefix[] = littlefs_base_path "/move";
+
+    char name_dst[64];
+    char name_src[64];
+    snprintf(name_dst, sizeof(name_dst), "%s_dst.txt", filename_prefix);
+    snprintf(name_src, sizeof(name_src), "%s_src.txt", filename_prefix);
+
+    unlink(name_dst);
+    unlink(name_src);
+
+    FILE* f = fopen(name_src, "w+");
+    TEST_ASSERT_NOT_NULL(f);
+    const char* str = "0123456789";
+    for (int i = 0; i < 400; ++i) {
+        TEST_ASSERT_NOT_EQUAL(EOF, fputs(str, f));
+    }
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT_EQUAL(0, rename(name_src, name_dst));
+    TEST_ASSERT_NULL(fopen(name_src, "r"));
+    FILE* fdst = fopen(name_dst, "r");
+    TEST_ASSERT_NOT_NULL(fdst);
+    TEST_ASSERT_EQUAL(0, fseek(fdst, 0, SEEK_END));
+    TEST_ASSERT_EQUAL(4000, ftell(fdst));
+    TEST_ASSERT_EQUAL(0, fclose(fdst));
+
     test_teardown();
 }
 
 TEST_CASE("can opendir root directory of FS", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_can_opendir(littlefs_base_path );
-    assert(0); // TODO
+
+    const char path[] = littlefs_base_path;
+
+    char name_dir_file[64];
+    const char * file_name = "test_opd.txt";
+    snprintf(name_dir_file, sizeof(name_dir_file), "%s/%s", path, file_name);
+    unlink(name_dir_file);
+    test_littlefs_create_file_with_text(name_dir_file, "test_opendir\n");
+    DIR* dir = opendir(path);
+    TEST_ASSERT_NOT_NULL(dir);
+    bool found = false;
+    while (true) {
+        struct dirent* de = readdir(dir);
+        if (!de) {
+            break;
+        }
+        if (strcasecmp(de->d_name, file_name) == 0) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+    TEST_ASSERT_EQUAL(0, closedir(dir));
+    unlink(name_dir_file);
+
     test_teardown();
 }
 
 TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_opendir_readdir_rewinddir(littlefs_base_path "/dir");
-    assert(0); // TODO
+    const char dir_prefix[] = littlefs_base_path "/dir";
+
+    char name_dir_inner_file[64];
+    char name_dir_inner[64];
+    char name_dir_file3[64];
+    char name_dir_file2[64];
+    char name_dir_file1[64];
+
+    snprintf(name_dir_inner_file, sizeof(name_dir_inner_file), "%s/inner/3.txt", dir_prefix);
+    snprintf(name_dir_inner, sizeof(name_dir_inner), "%s/inner", dir_prefix);
+    snprintf(name_dir_file3, sizeof(name_dir_file2), "%s/boo.bin", dir_prefix);
+    snprintf(name_dir_file2, sizeof(name_dir_file2), "%s/2.txt", dir_prefix);
+    snprintf(name_dir_file1, sizeof(name_dir_file1), "%s/1.txt", dir_prefix);
+
+    unlink(name_dir_inner_file);
+    rmdir(name_dir_inner);
+    unlink(name_dir_file1);
+    unlink(name_dir_file2);
+    unlink(name_dir_file3);
+    rmdir(dir_prefix);
+
+    test_littlefs_create_file_with_text(name_dir_file1, "1\n");
+    test_littlefs_create_file_with_text(name_dir_file2, "2\n");
+    test_littlefs_create_file_with_text(name_dir_file3, "\01\02\03");
+    test_littlefs_create_file_with_text(name_dir_inner_file, "3\n");
+
+    DIR* dir = opendir(dir_prefix);
+    TEST_ASSERT_NOT_NULL(dir);
+    int count = 0;
+    const char* names[4];
+    while(count < 4) {
+        struct dirent* de = readdir(dir);
+        if (!de) {
+            break;
+        }
+        printf("found '%s'\n", de->d_name);
+        if (strcasecmp(de->d_name, "1.txt") == 0) {
+            TEST_ASSERT_TRUE(de->d_type == DT_REG);
+            names[count] = "1.txt";
+            ++count;
+        } else if (strcasecmp(de->d_name, "2.txt") == 0) {
+            TEST_ASSERT_TRUE(de->d_type == DT_REG);
+            names[count] = "2.txt";
+            ++count;
+        } else if (strcasecmp(de->d_name, "inner/3.txt") == 0) {
+            TEST_ASSERT_TRUE(de->d_type == DT_REG);
+            names[count] = "inner/3.txt";
+            ++count;
+        } else if (strcasecmp(de->d_name, "boo.bin") == 0) {
+            TEST_ASSERT_TRUE(de->d_type == DT_REG);
+            names[count] = "boo.bin";
+            ++count;
+        } else {
+            TEST_FAIL_MESSAGE("unexpected directory entry");
+        }
+    }
+    TEST_ASSERT_EQUAL(count, 4);
+
+    rewinddir(dir);
+    struct dirent* de = readdir(dir);
+    TEST_ASSERT_NOT_NULL(de);
+    TEST_ASSERT_EQUAL(0, strcasecmp(de->d_name, names[0]));
+    seekdir(dir, 3);
+    de = readdir(dir);
+    TEST_ASSERT_NOT_NULL(de);
+    TEST_ASSERT_EQUAL(0, strcasecmp(de->d_name, names[3]));
+    seekdir(dir, 1);
+    de = readdir(dir);
+    TEST_ASSERT_NOT_NULL(de);
+    TEST_ASSERT_EQUAL(0, strcasecmp(de->d_name, names[1]));
+    seekdir(dir, 2);
+    de = readdir(dir);
+    TEST_ASSERT_NOT_NULL(de);
+    TEST_ASSERT_EQUAL(0, strcasecmp(de->d_name, names[2]));
+
+    TEST_ASSERT_EQUAL(0, closedir(dir));
+
     test_teardown();
 }
 
 TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
 {
     test_setup();
-    //test_littlefs_readdir_many_files(littlefs_base_path "/dir2");
-    assert(0); // TODO
+    test_littlefs_readdir_many_files(littlefs_base_path "/dir2");
     test_teardown();
 }
 
 TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 {
     test_setup();
-    //test_littlefs_concurrent(littlefs_base_path "/f");
-    assert(0); // TODO
+    test_littlefs_concurrent(littlefs_base_path "/f");
     test_teardown();
 }
 
@@ -233,8 +385,7 @@ static void test_littlefs_overwrite_append(const char* filename)
     TEST_ASSERT_EQUAL(0, fclose(f_r));
 }
 
-
-void test_littlefs_read_file(const char* filename)
+static void test_littlefs_read_file(const char* filename)
 {
     FILE* f = fopen(filename, "r");
     TEST_ASSERT_NOT_NULL(f);
@@ -245,7 +396,7 @@ void test_littlefs_read_file(const char* filename)
     TEST_ASSERT_EQUAL(0, fclose(f));
 }
 
-void test_littlefs_readdir_many_files(const char* dir_prefix)
+static void test_littlefs_readdir_many_files(const char* dir_prefix)
 {
     const int n_files = 40;
     const int n_folders = 4;
@@ -318,6 +469,120 @@ static void test_littlefs_open_max_files(const char* filename_prefix, size_t fil
         fclose(files[i]);
     }
     free(files);
+}
+
+typedef struct {
+    const char* filename;
+    bool write;
+    size_t word_count;
+    int seed;
+    SemaphoreHandle_t done;
+    int result;
+} read_write_test_arg_t;
+
+#define READ_WRITE_TEST_ARG_INIT(name, seed_) \
+        { \
+            .filename = name, \
+            .seed = seed_, \
+            .word_count = 4096, \
+            .write = true, \
+            .done = xSemaphoreCreateBinary() \
+        }
+
+static void read_write_task(void* param)
+{
+    read_write_test_arg_t* args = (read_write_test_arg_t*) param;
+    FILE* f = fopen(args->filename, args->write ? "wb" : "rb");
+    if (f == NULL) {
+        args->result = ESP_ERR_NOT_FOUND;
+        goto done;
+    }
+
+    srand(args->seed);
+    for (size_t i = 0; i < args->word_count; ++i) {
+        uint32_t val = rand();
+        if (args->write) {
+            int cnt = fwrite(&val, sizeof(val), 1, f);
+            if (cnt != 1) {
+                ets_printf("E(w): i=%d, cnt=%d val=%d\n\n", i, cnt, val);
+                args->result = ESP_FAIL;
+                goto close;
+            }
+        } else {
+            uint32_t rval;
+            int cnt = fread(&rval, sizeof(rval), 1, f);
+            if (cnt != 1) {
+                ets_printf("E(r): i=%d, cnt=%d rval=%d\n\n", i, cnt, rval);
+                args->result = ESP_FAIL;
+                goto close;
+            }
+        }
+    }
+    args->result = ESP_OK;
+
+close:
+    fclose(f);
+
+done:
+    xSemaphoreGive(args->done);
+    vTaskDelay(1);
+    vTaskDelete(NULL);
+}
+
+
+static void test_littlefs_concurrent(const char* filename_prefix)
+{
+    char names[4][64];
+    for (size_t i = 0; i < 4; ++i) {
+        snprintf(names[i], sizeof(names[i]), "%s%d", filename_prefix, i + 1);
+        unlink(names[i]);
+    }
+
+    read_write_test_arg_t args1 = READ_WRITE_TEST_ARG_INIT(names[0], 1);
+    read_write_test_arg_t args2 = READ_WRITE_TEST_ARG_INIT(names[1], 2);
+
+    printf("writing f1 and f2\n");
+    const int cpuid_0 = 0;
+    const int cpuid_1 = portNUM_PROCESSORS - 1;
+    xTaskCreatePinnedToCore(&read_write_task, "rw1", 2048, &args1, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw2", 2048, &args2, 3, NULL, cpuid_1);
+
+    xSemaphoreTake(args1.done, portMAX_DELAY);
+    printf("f1 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args1.result);
+    xSemaphoreTake(args2.done, portMAX_DELAY);
+    printf("f2 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args2.result);
+
+    args1.write = false;
+    args2.write = false;
+    read_write_test_arg_t args3 = READ_WRITE_TEST_ARG_INIT(names[2], 3);
+    read_write_test_arg_t args4 = READ_WRITE_TEST_ARG_INIT(names[3], 4);
+
+    printf("reading f1 and f2, writing f3 and f4\n");
+
+    xTaskCreatePinnedToCore(&read_write_task, "rw3", 2048, &args3, 3, NULL, cpuid_1);
+    xTaskCreatePinnedToCore(&read_write_task, "rw4", 2048, &args4, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw1", 2048, &args1, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw2", 2048, &args2, 3, NULL, cpuid_1);
+
+    xSemaphoreTake(args1.done, portMAX_DELAY);
+    printf("f1 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args1.result);
+    xSemaphoreTake(args2.done, portMAX_DELAY);
+    printf("f2 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args2.result);
+    xSemaphoreTake(args3.done, portMAX_DELAY);
+    printf("f3 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args3.result);
+    xSemaphoreTake(args4.done, portMAX_DELAY);
+    printf("f4 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args4.result);
+
+    vSemaphoreDelete(args1.done);
+    vSemaphoreDelete(args2.done);
+    vSemaphoreDelete(args3.done);
+    vSemaphoreDelete(args4.done);
 }
 
 static void test_setup() {
