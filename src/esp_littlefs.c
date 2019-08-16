@@ -832,7 +832,9 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
     res = lfs_stat(efs->fs, path, &info);
     sem_give(efs);
     if (res < 0) {
-        ESP_LOGE(TAG, "Failed to stat path \"%s\". Error %s (%d)",
+        /* Not strictly an error, since stat can be used to check
+         * if a file exists */
+        ESP_LOGI(TAG, "Failed to stat path \"%s\". Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
         return res;
     }
