@@ -64,6 +64,7 @@ static esp_err_t esp_littlefs_get_empty(int *index);
 static void esp_littlefs_free(esp_littlefs_t ** efs);
 static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd);
 static int esp_littlefs_get_fd(esp_littlefs_t *efs);
+static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path);
 static void esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 static int esp_littlefs_flags_conv(int m);
 
@@ -614,7 +615,8 @@ static int esp_littlefs_get_fd(esp_littlefs_t *efs){
 
 /**
  * @brief Release a file descriptor
- * @parameter efs file system context
+ * @param[in,out] efs file system context
+ * @param[in] fd File Descriptor to release
  * @return 0 on success. -1 if a FD cannot be obtained.
  */
 static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
@@ -638,6 +640,26 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     return 0;
 }
 
+/**
+ * @brief finds an open file descriptor by file name.
+ * @param[in,out] efs file system context
+ * @param[in] path File path to check.
+ * @returns integer file descriptor. Returns -1 if not found.
+ */
+static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
+    sem_take(efs);
+    for(uint8_t i=0; i < efs->max_files; i++){
+        bool used;
+        used = (efs->fd_used >> i) & 1;
+        if( used && 0 == strcmp(path, efs->files[i].path) ){
+            ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
+            return i;
+        }
+    }
+    sem_give(efs);
+    ESP_LOGD(TAG, "Unable to get a find FD for \"%s\"", path);
+    return -1;
+}
 
 /*** Filesystem Hooks***/
 
@@ -844,6 +866,7 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
 }
 
 static int vfs_littlefs_unlink(void* ctx, const char *path) {
+#define fail_str_1 "Failed to unlink path \"%s\"."
     assert(path);
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     struct lfs_info info;
@@ -853,9 +876,15 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
     res = lfs_stat(efs->fs, path, &info);
     if (res < 0) {
         sem_give(efs);
-        ESP_LOGE(TAG, "Failed to stat path \"%s\". Error %s (%d)",
+        ESP_LOGE(TAG, fail_str_1 " Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
         return res;
+    }
+
+    if(esp_littlefs_get_fd_by_name(efs, path) >= 0) {
+        sem_give(efs);
+        ESP_LOGE(TAG, fail_str_1 " Has open FD.", path);
+        return -1;
     }
 
     if (info.type == LFS_TYPE_DIR) {
@@ -867,7 +896,7 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
     res = lfs_remove(efs->fs, path);
     if (res < 0) {
         sem_give(efs);
-        ESP_LOGE(TAG, "Failed to unlink path \"%s\". Error %s (%d)",
+        ESP_LOGE(TAG, fail_str_1 " Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
         return res;
     }
@@ -875,6 +904,7 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
     sem_give(efs);
 
     return 0;
+#undef fail_str_1
 }
 
 static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
@@ -882,6 +912,19 @@ static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
     int res;
 
     sem_take(efs);
+
+    if(esp_littlefs_get_fd_by_name(efs, src) >= 0){
+        sem_give(efs);
+        ESP_LOGE(TAG, "Cannot rename; src \"%s\" is open.", src);
+        return -1;
+    }
+    else if(esp_littlefs_get_fd_by_name(efs, src) >= 0){
+        sem_give(efs);
+        ESP_LOGE(TAG, "Cannot rename; dst \"%s\" is open.", dst);
+        return -1;
+    }
+
+
     res = lfs_rename(efs->fs, src, dst);
     sem_give(efs);
     if (res < 0) {
