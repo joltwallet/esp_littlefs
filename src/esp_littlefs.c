@@ -188,6 +188,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
 
     if( err != ESP_OK ){
         /* Create a tmp context */
+        ESP_LOGD(TAG, "Temporarily creating EFS context.");
         efs_free = true;
         const esp_vfs_littlefs_conf_t conf = {
                 /* base_name not necessary for initializing */
