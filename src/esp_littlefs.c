@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-//#define ESP_LOCAL_LOG_LEVEL ESP_LOG_DEBUG
+//#define ESP_LOCAL_LOG_LEVEL 4
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
