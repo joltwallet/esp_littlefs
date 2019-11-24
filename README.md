@@ -63,7 +63,7 @@ Deleting 5 88KB files:
 ```
 FAT:      1,216,137 us
 SPIFFS:   3,712,190 us
-LittleFS: 32,827 us
+LittleFS:    32,827 us
 ```
 
 
