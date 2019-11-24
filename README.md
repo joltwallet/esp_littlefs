@@ -37,10 +37,12 @@ and changing `ABSOLUTE_MAX_NUM_FILES`.
 
 # Running Unit Tests
 
-Clone the [ESP-IDF unit test app](https://github.com/espressif/esp-idf/tree/master/tools/unit-test-app) 
-and add this component to the `components/` directory. Run `make menuconfig` to
-set up parameters specific to your development environment. Finally, flash the 
-unit test app via `make flash TEST_COMPONENTS='littlefs' monitor`.
+To flash the unit-tester app and the unit-tests, run
+
+
+```
+make tests
+```
 
 # Acknowledgement
 
