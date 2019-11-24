@@ -13,3 +13,4 @@ ota_1,      0,    ota_1,   ,        64K
 # flash_test partition used for SPI flash tests, WL FAT tests, and SPIFFS tests
 fat_store, data, fat,     ,        528K
 spiffs_store,  data, spiffs,    ,        512K
+flash_test,  data, spiffs,    ,        512K
