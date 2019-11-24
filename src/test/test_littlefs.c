@@ -17,6 +17,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "esp_partition.h"
+#include "errno.h"
 
 
 static const char littlefs_test_partition_label[] = "flash_test";
@@ -245,6 +246,7 @@ TEST_CASE("can opendir root directory of FS", "[littlefs]")
 
 TEST_CASE("mkdir, rmdir", "[littlefs]")
 {
+    test_setup();
     const char filename_prefix[] = littlefs_base_path "/";
 
     char name_dir1[64];
@@ -261,7 +263,7 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_TRUE(st.st_mode & S_IFDIR);
     TEST_ASSERT_FALSE(st.st_mode & S_IFREG);
     TEST_ASSERT_EQUAL(0, rmdir(name_dir1));
-    TEST_ASSERT_EQUAL(-1, stat(name_dir1, &st));
+    TEST_ASSERT_EQUAL(-2, stat(name_dir1, &st));
 
     TEST_ASSERT_EQUAL(0, mkdir(name_dir2, 0755));
     test_littlefs_create_file_with_text(name_dir2_file, "foo\n");
@@ -274,6 +276,8 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
     TEST_ASSERT_EQUAL(0, rmdir(name_dir2));
+
+    test_teardown();
 }
 
 TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
@@ -302,6 +306,8 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
     rmdir(dir_prefix);
 
     /* Create the files */
+    TEST_ASSERT_EQUAL(0, mkdir(dir_prefix, 0755));
+    TEST_ASSERT_EQUAL(0, mkdir(name_dir_inner, 0755));
     test_littlefs_create_file_with_text(name_dir_file1, "1\n");
     test_littlefs_create_file_with_text(name_dir_file2, "2\n");
     test_littlefs_create_file_with_text(name_dir_file3, "\01\02\03");
@@ -311,12 +317,11 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
     TEST_ASSERT_NOT_NULL(dir);
     int count = 0;
     const char* names[4];
-    while(count < 4) {
+    while( true ) {
         struct dirent* de = readdir(dir);
         if (!de) {
             break;
         }
-        printf("found '%s'\n", de->d_name);
         if (strcasecmp(de->d_name, "1.txt") == 0) {
             TEST_ASSERT_TRUE(de->d_type == DT_REG);
             names[count] = "1.txt";
@@ -325,16 +330,18 @@ TEST_CASE("opendir, readdir, rewinddir, seekdir work as expected", "[littlefs]")
             TEST_ASSERT_TRUE(de->d_type == DT_REG);
             names[count] = "2.txt";
             ++count;
-        } else if (strcasecmp(de->d_name, "inner/3.txt") == 0) {
-            TEST_ASSERT_TRUE(de->d_type == DT_REG);
-            names[count] = "inner/3.txt";
+        } else if (strcasecmp(de->d_name, "inner") == 0) {
+            TEST_ASSERT_TRUE(de->d_type == DT_DIR);
+            names[count] = "inner";
             ++count;
         } else if (strcasecmp(de->d_name, "boo.bin") == 0) {
             TEST_ASSERT_TRUE(de->d_type == DT_REG);
             names[count] = "boo.bin";
             ++count;
         } else {
-            TEST_FAIL_MESSAGE("unexpected directory entry");
+            char buf[512] = { 0 };
+            snprintf(buf, sizeof(buf), "unexpected directory entry \"%s\"", de->d_name);
+            TEST_FAIL_MESSAGE(buf);
         }
     }
     TEST_ASSERT_EQUAL(count, 4);
@@ -440,6 +447,7 @@ static void test_littlefs_readdir_many_files(const char* dir_prefix)
     char file_name[ESP_VFS_PATH_MAX + CONFIG_LITTLEFS_OBJ_NAME_LEN];
 
     /* clean stale files before the test */
+    mkdir(dir_prefix, 0755);
     DIR* dir = opendir(dir_prefix);
     if (dir) {
         while (true) {
@@ -456,6 +464,8 @@ static void test_littlefs_readdir_many_files(const char* dir_prefix)
     /* create files */
     for (int d = 0; d < n_folders; ++d) {
         printf("filling directory %d\n", d);
+        snprintf(file_name, sizeof(file_name), "%s/%d", dir_prefix, d);
+        mkdir( file_name, 0755 );
         for (int f = 0; f < n_files; ++f) {
             snprintf(file_name, sizeof(file_name), "%s/%d/%d.txt", dir_prefix, d, f);
             test_littlefs_create_file_with_text(file_name, file_name);
