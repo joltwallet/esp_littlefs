@@ -61,4 +61,8 @@ menu "LittleFS"
             better performance at the cost of less consistent wear distribution. 
             -1 disables wear-leveling.
 
+    config LITTLEFS_USE_MTIME
+        bool "Save file modification time"
+        default "y"
+
 endmenu
