@@ -56,6 +56,7 @@ static long    vfs_littlefs_telldir(void* ctx, DIR* pdir);
 static void    vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset);
 static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
+static int     vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
@@ -67,6 +68,9 @@ static int esp_littlefs_get_fd(esp_littlefs_t *efs);
 static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path);
 static void esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 static int esp_littlefs_flags_conv(int m);
+static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
+static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
+static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
 
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
@@ -127,7 +131,11 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .telldir_p   = &vfs_littlefs_telldir,
         .mkdir_p     = &vfs_littlefs_mkdir,
         .rmdir_p     = &vfs_littlefs_rmdir,
-        .utime_p = NULL,
+#ifdef CONFIG_LITTLEFS_USE_MTIME
+        .utime_p     = &vfs_littlefs_utime,
+#else
+        .utime_p     = NULL,
+#endif // CONFIG_LITTLEFS_USE_MTIME
     };
 
     esp_err_t err = esp_littlefs_init(conf);
@@ -699,6 +707,12 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
         goto exit;
     }
     strlcpy(file->path, path, sizeof(file->path));
+
+    if (!(lfs_flags & LFS_O_RDONLY)) {
+        /* If this is being opened as not read-only */
+        vfs_littlefs_update_mtime(efs, path);
+    }
+
     sem_give(efs);
 
     return fd;
@@ -838,6 +852,7 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
         return res;
     }
     st->st_size = info.size;
+    st->st_mtime = vfs_littlefs_get_mtime(efs, file->path);
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
@@ -862,6 +877,7 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
         return res;
     }
     st->st_size = info.size;
+    st->st_mtime = vfs_littlefs_get_mtime(efs, path);
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
@@ -1127,3 +1143,56 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     return 0;
 }
 
+static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t)
+{
+    int res;
+    res = lfs_setattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+            &t, sizeof(t));
+    if( res < 0 ) {
+        ESP_LOGE(TAG, "Failed to update mtime (%d)", res);
+    }
+
+    return res;
+}
+
+static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path)
+{
+#if CONFIG_LITTLEFS_USE_MTIME
+    assert(path);
+    vfs_littlefs_update_mtime_value(efs, path, time(NULL));
+#endif //CONFIG_LITTLEFS_USE_MTIME
+}
+
+
+#if CONFIG_LITTLEFS_USE_MTIME
+static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times)
+{
+    esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
+    time_t t;
+
+    assert(path);
+
+    if (times) {
+        t = times->modtime;
+    } else {
+        // use current time
+        t = time(NULL);
+    }
+
+    int ret = vfs_littlefs_update_mtime_value(efs, path, t);
+    return ret;
+}
+
+static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
+{
+    time_t t;
+    int size;
+    size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+            &t, sizeof(t));
+    if( size < 0 ) {
+        ESP_LOGE(TAG, "Failed to get mtime attribute %s (%d)",
+                esp_littlefs_errno(size), size);
+    }
+    return t;
+}
+#endif //CONFIG_LITTLEFS_USE_MTIME

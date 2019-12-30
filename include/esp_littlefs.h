@@ -25,6 +25,11 @@
 extern "C" {
 #endif
 
+enum {
+    LITTLEFS_ATTR_MTIME,
+    LITTLEFS_ATTR_MAX
+};
+
 /**
  *Configuration structure for esp_vfs_littlefs_register.
  */

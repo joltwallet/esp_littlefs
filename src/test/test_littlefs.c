@@ -382,6 +382,49 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
     test_teardown();
 }
 
+#if CONFIG_LITTLEFS_USE_MTIME
+TEST_CASE("mtime support", "[littlefs]")
+{
+
+    /* Open a file, check that mtime is set correctly */
+    const char* filename = littlefs_base_path "/time";
+    test_setup();
+    time_t t_before_create = time(NULL);
+    test_littlefs_create_file_with_text(filename, "test");
+    time_t t_after_create = time(NULL);
+
+    struct stat st;
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
+    printf("mtime=%d\n", (int) st.st_mtime);
+    TEST_ASSERT(st.st_mtime >= t_before_create
+             && st.st_mtime <= t_after_create);
+
+    /* Wait a bit, open again, check that mtime is updated */
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    time_t t_before_open = time(NULL);
+    FILE *f = fopen(filename, "a");
+    time_t t_after_open = time(NULL);
+    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    printf("mtime=%d\n", (int) st.st_mtime);
+    TEST_ASSERT(st.st_mtime >= t_before_open
+             && st.st_mtime <= t_after_open);
+    fclose(f);
+
+    /* Wait a bit, open for reading, check that mtime is not updated */
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    time_t t_before_open_ro = time(NULL);
+    f = fopen(filename, "r");
+    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    printf("mtime=%d\n", (int) st.st_mtime);
+    TEST_ASSERT(t_before_open_ro > t_after_open
+             && st.st_mtime >= t_before_open
+             && st.st_mtime <= t_after_open);
+    fclose(f);
+
+    test_teardown();
+}
+#endif
+
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text)
 {
