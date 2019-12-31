@@ -64,5 +64,34 @@ menu "LittleFS"
     config LITTLEFS_USE_MTIME
         bool "Save file modification time"
         default "y"
+        help
+            Saves timestamp on modification. Uses an additional 4bytes.
+
+    choice LITTLEFS_MTIME
+        prompt "mtime attribute options"
+        depends on LITTLEFS_USE_MTIME
+        default LITTLEFS_MTIME_USE_SECONDS
+        help
+            Help
+
+        config LITTLEFS_MTIME_USE_SECONDS
+            bool "Use Seconds"
+            help
+                Saves timestamp on modification.
+
+        config LITTLEFS_MTIME_USE_NONCE
+            bool "Use Nonce"
+            help
+                Saves nonce on modification. Uses an additional 4bytes.
+                A file who's nonce is the same as it was at a previous time has 
+                high probability of not having been modified.
+
+                Upon file modification, the nonce is incremented by one. Upon file
+                creation, a random nonce is assigned.
+
+                There is a very slim chance that a file will have the same nonce if
+                it is deleted and created again (approx 1 in 4 billion).
+
+    endchoice
 
 endmenu

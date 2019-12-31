@@ -18,6 +18,7 @@
 #include <sys/fcntl.h>
 #include <sys/lock.h>
 #include "esp32/rom/spi_flash.h"
+#include "esp_system.h"
 
 #include "esp_littlefs.h"
 #include "littlefs_api.h"
@@ -1143,6 +1144,9 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     return 0;
 }
 
+/**
+ * Sets the mtime attr to t.
+ */
 static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t)
 {
     int res;
@@ -1155,11 +1159,13 @@ static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path
     return res;
 }
 
+/**
+ * Sets the mtime attr to an appropriate value
+ */
 static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path)
 {
 #if CONFIG_LITTLEFS_USE_MTIME
-    assert(path);
-    vfs_littlefs_update_mtime_value(efs, path, time(NULL));
+    vfs_littlefs_utime(efs, path, NULL);
 #endif //CONFIG_LITTLEFS_USE_MTIME
 }
 
@@ -1175,8 +1181,19 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
     if (times) {
         t = times->modtime;
     } else {
+#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
         // use current time
         t = time(NULL);
+#elif CONFIG_LITTLEFS_MTIME_USE_NONCE
+        assert( sizeof(time_t) == 4 );
+        t = vfs_littlefs_get_mtime(efs, path);
+        if( 0 == t ) t = esp_random();
+        else t += 1;
+
+        if( 0 == t ) t = 1;
+#else
+#error "Invalid MTIME configuration"
+#endif
     }
 
     int ret = vfs_littlefs_update_mtime_value(efs, path, t);
@@ -1185,12 +1202,12 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
 
 static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
 {
-    time_t t;
+    time_t t = 0;
     int size;
     size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
     if( size < 0 ) {
-        ESP_LOGE(TAG, "Failed to get mtime attribute %s (%d)",
+        ESP_LOGI(TAG, "Failed to get mtime attribute %s (%d)",
                 esp_littlefs_errno(size), size);
     }
     return t;

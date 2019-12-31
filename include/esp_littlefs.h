@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 enum {
-    LITTLEFS_ATTR_MTIME,
+    LITTLEFS_ATTR_MTIME,   /**< Last Modified - time (seconds) */
     LITTLEFS_ATTR_MAX
 };
 

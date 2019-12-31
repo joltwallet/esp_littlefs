@@ -383,6 +383,8 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 }
 
 #if CONFIG_LITTLEFS_USE_MTIME
+
+#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
 TEST_CASE("mtime support", "[littlefs]")
 {
 
@@ -421,10 +423,57 @@ TEST_CASE("mtime support", "[littlefs]")
              && st.st_mtime <= t_after_open);
     fclose(f);
 
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+
     test_teardown();
 }
 #endif
 
+#if CONFIG_LITTLEFS_MTIME_USE_NONCE
+TEST_CASE("mnonce support", "[littlefs]")
+{
+    /* Open a file, check that mtime is set correctly */
+    struct stat st;
+    const char* filename = littlefs_base_path "/time";
+    test_setup();
+    test_littlefs_create_file_with_text(filename, "test");
+
+    int nonce1;
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
+    nonce1 = (int) st.st_mtime;
+    printf("mtime=%d\n", nonce1);
+    TEST_ASSERT(nonce1 >= 0);
+
+    /* open again, check that mtime is updated */
+    int nonce2;
+    FILE *f = fopen(filename, "a");
+    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    nonce2 = (int) st.st_mtime;
+    printf("mtime=%d\n", nonce2);
+    if( nonce1 == UINT32_MAX ) {
+        TEST_ASSERT_EQUAL_INT(1, nonce2);
+    }
+    else {
+        TEST_ASSERT_EQUAL_INT(1, nonce2-nonce1);
+    }
+    fclose(f);
+
+    /* open for reading, check that mtime is not updated */
+    int nonce3;
+    f = fopen(filename, "r");
+    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    nonce3 = (int) st.st_mtime;
+    printf("mtime=%d\n", (int) st.st_mtime);
+    TEST_ASSERT_EQUAL_INT(nonce2, nonce3);
+    fclose(f);
+
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+
+    test_teardown();
+}
+#endif
+
+#endif
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text)
 {
