@@ -67,12 +67,6 @@ LittleFS:    32,827 us
 ```
 
 
-# Limitations
-
-Currently only an absolute maximum of *20* files can be opened at once. This can be
-increased by increasing the `esp_littlefs_t.fd_used` bitmask to a larger datatype, 
-and changing `ABSOLUTE_MAX_NUM_FILES`. 
-
 # Tips, Tricks, and Gotchas
 
 * LittleFS operates on blocks, and blocks have a size of 4096 bytes on the ESP32.
