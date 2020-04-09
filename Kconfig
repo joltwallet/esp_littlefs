@@ -66,6 +66,12 @@ menu "LittleFS"
         default "y"
         help
             Saves timestamp on modification. Uses an additional 4bytes.
+    
+    config LITTLEFS_USE_ONLY_HASH
+        bool "Only remember a hash insted of a file path in the file descriptor"
+        default "y"
+        help
+            Saves heap memory but might cause files to prevent unlinking or renaming upon (unlikely) hash collision.
 
     choice LITTLEFS_MTIME
         prompt "mtime attribute options"

@@ -42,7 +42,6 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
 static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size);
 static int     vfs_littlefs_close(void* ctx, int fd);
 static off_t   vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode);
-static int     vfs_littlefs_fstat(void* ctx, int fd, struct stat * st);
 static int     vfs_littlefs_stat(void* ctx, const char * path, struct stat * st);
 static int     vfs_littlefs_unlink(void* ctx, const char *path);
 static int     vfs_littlefs_rename(void* ctx, const char *src, const char *dst);
@@ -63,14 +62,15 @@ static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
-static int       esp_littlefs_free_fd(esp_littlefs_t *efs, int fd);
-static int       esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len, vfs_littlefs_file_t ** file);
-static int       esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path);
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 static int       esp_littlefs_flags_conv(int m);
 static void      vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
 static int       vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
 static time_t    vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
+
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+static int     vfs_littlefs_fstat(void* ctx, int fd, struct stat * st);
+#endif
 
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
@@ -132,7 +132,11 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .read_p      = &vfs_littlefs_read,
         .open_p      = &vfs_littlefs_open,
         .close_p     = &vfs_littlefs_close,
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         .fstat_p     = &vfs_littlefs_fstat,
+#else
+        .fstat_p     = NULL, /* Not supported */
+#endif
         .stat_p      = &vfs_littlefs_stat,
         .link_p      = NULL, /* Not Supported */
         .unlink_p    = &vfs_littlefs_unlink,
@@ -621,7 +625,12 @@ static int sem_give(esp_littlefs_t *efs) {
  * @return integer file descriptor. Returns -1 if a FD cannot be obtained.
  * @warning This must be called with lock taken
  */
-static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len, vfs_littlefs_file_t ** file){
+static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** file
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+  , const uint8_t path_len
+#endif
+    )
+{
     int i = -1;
 
     /* Make sure we are space to store new fd */
@@ -639,7 +648,11 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len,
 
 
     /* Allocate file descriptor here now */
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     *file = calloc(1, sizeof(**file) + path_len);
+#else
+    *file = calloc(1, sizeof(**file));
+#endif
     if (*file == NULL) {
         /* If it fails here, the file system might have a larger cache, but it's harmless, no need to reverse it */
         ESP_LOGE(TAG, "Unable to allocate FD");
@@ -648,6 +661,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len,
 
     /* Starting from here, nothing can fail anymore */
 
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     /* The trick here is to avoid dual allocation so the path pointer 
         should point to the next byte after it:
         file => [ lfs_file | # | next | path | free_space ]
@@ -655,7 +669,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len,
                                             |__/
     */
     (*file)->path = (char*)((*file) + sizeof(**file));
-
+#endif
  
     /* Now find a free place in cache */
     for(i=0; i < efs->cache_size; i++) {
@@ -735,7 +749,11 @@ static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
     for(uint16_t i=0, j=0; i < efs->cache_size && j < efs->fd_count; i++){
         if (efs->cache[i]) {
             ++j; 
-            if (efs->cache[i]->hash == hash && strcmp(path, efs->cache[i]->path) == 0) {
+            if (efs->cache[i]->hash == hash
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+             && strcmp(path, efs->cache[i]->path) == 0
+#endif
+            ) {
                 ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
                 return i;
             }
@@ -752,8 +770,9 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     int fd=-1, lfs_flags, res;
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
     vfs_littlefs_file_t *file = NULL;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     size_t path_len = strlen(path) + 1;
-
+#endif
     assert(path);
 
     ESP_LOGD(TAG, "Opening %s", path);
@@ -763,7 +782,11 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
     /* Get a FD */
     sem_take(efs);
-    fd = esp_littlefs_allocate_fd(efs, (uint8_t)path_len, &file);
+    fd = esp_littlefs_allocate_fd(efs, &file
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+    , (uint8_t)path_len
+#endif
+    );
     if(fd < 0) {
         sem_give(efs);
         ESP_LOGE(TAG, "Error obtaining FD");
@@ -779,7 +802,9 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
                 esp_littlefs_errno(res), res);
         return LFS_ERR_INVAL;
     }
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     memcpy(file->path, path, path_len);
+#endif
 
     if (!(lfs_flags & LFS_O_RDONLY)) {
         /* If this is being opened as not read-only */
@@ -807,8 +832,13 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     sem_give(efs);
 
     if(res < 0){
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, "Failed to write file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGE(TAG, "Failed to write file %d. Error (%d)",
+                fd, res);
+#endif
         return res;
     }
 
@@ -832,8 +862,13 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
     sem_give(efs);
 
     if(res < 0){
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, "Failed to read file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGE(TAG, "Failed to read file %d. Error (%d)",
+                fd, res);
+#endif
         return res;
     }
 
@@ -855,8 +890,13 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
         sem_give(efs);
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, "Failed to close file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGE(TAG, "Failed to close file %d. Error (%d)",
+                fd, res);
+#endif
         return res;
     }
     esp_littlefs_free_fd(efs, fd);
@@ -890,14 +930,20 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     sem_give(efs);
 
     if(res < 0){
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, "Failed to seek file \"%s\" to offset %08x. Error %s (%d)",
                 file->path, (unsigned int)offset, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGE(TAG, "Failed to seek file %d to offset %08x. Error (%d)",
+                fd, (unsigned int)offset, res);
+#endif
         return res;
     }
 
     return res;
 }
 
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     struct lfs_info info;
@@ -927,6 +973,7 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
+#endif
 
 static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
     assert(path);

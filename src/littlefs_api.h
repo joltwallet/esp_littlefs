@@ -22,7 +22,9 @@ typedef struct _vfs_littlefs_file_t {
     lfs_file_t file;
     uint32_t   hash;
     struct _vfs_littlefs_file_t * next;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     char     * path;
+#endif
 } vfs_littlefs_file_t;
 
 /**
