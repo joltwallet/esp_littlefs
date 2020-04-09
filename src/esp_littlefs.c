@@ -8,7 +8,6 @@
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
-#include "esp_image_format.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
