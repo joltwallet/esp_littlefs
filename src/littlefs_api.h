@@ -14,9 +14,15 @@
 extern "C" {
 #endif
 
-typedef struct {
+/**
+ * @brief a file descriptor
+ * That's also a chained list used for keeping tracks of all opened file descriptor 
+ */
+typedef struct _vfs_littlefs_file_t {
     lfs_file_t file;
-    char path[LFS_NAME_MAX]; // TODO: dynamically allocate
+    uint32_t   hash;
+    struct _vfs_littlefs_file_t * next;
+    char     * path;
 } vfs_littlefs_file_t;
 
 /**
@@ -27,11 +33,12 @@ typedef struct {
     SemaphoreHandle_t lock;                   /*!< FS lock */
     const esp_partition_t* partition;         /*!< The partition on which littlefs is located */
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
+
     struct lfs_config cfg;                    /*!< littlefs Mount configuration */
-    vfs_littlefs_file_t *files;               /*!< Array of files */
-    uint32_t fd_used:20;                      /*!< Mask of used file descriptors */
-    uint32_t max_files:7;                     /*!< Maximum number of file descriptors */
-    uint32_t mounted:1;                       /*!< littlefs is mounted */
+    vfs_littlefs_file_t *file;                /*!< List of files */
+    vfs_littlefs_file_t **cache;              /*!< A cache of pointers to the opened files */
+    uint16_t             cache_size;          /*!< The cache allocated size (in pointers) */
+    uint16_t             fd_count;            /*!< The count of opened file descriptor used to speed up computation */
 } esp_littlefs_t;
 
 /**

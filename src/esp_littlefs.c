@@ -24,7 +24,6 @@
 
 static const char TAG[] = "esp_littlefs";
 
-#define ABSOLUTE_MAX_NUM_FILES 20
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
 /**
@@ -63,15 +62,15 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
-static void esp_littlefs_free(esp_littlefs_t ** efs);
-static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd);
-static int esp_littlefs_get_fd(esp_littlefs_t *efs);
-static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path);
-static void esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
-static int esp_littlefs_flags_conv(int m);
-static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
-static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
-static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
+static void      esp_littlefs_free(esp_littlefs_t ** efs);
+static int       esp_littlefs_free_fd(esp_littlefs_t *efs, int fd);
+static int       esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len, vfs_littlefs_file_t ** file);
+static int       esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path);
+static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
+static int       esp_littlefs_flags_conv(int m);
+static void      vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
+static int       vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
+static time_t    vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
 
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
@@ -80,18 +79,32 @@ static SemaphoreHandle_t _efs_lock = NULL;
 static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
 
 /********************
+ * Helper Functions *
+ ********************/
+void esp_littlefs_freefs(esp_littlefs_t * efs) {
+    /* Need to free all files that were opened */
+    while (efs->file) {
+        vfs_littlefs_file_t * next = efs->file->next;
+        free(efs->file);
+        efs->file = next;
+    }
+    free(efs->cache); 
+    efs->cache = 0;
+    efs->cache_size = efs->fd_count = 0;
+}
+
+
+/********************
  * Public Functions *
  ********************/
 
 bool esp_littlefs_mounted(const char* partition_label) {
     int index;
     esp_err_t err;
-    esp_littlefs_t *efs = NULL;
 
     err = esp_littlefs_by_label(partition_label, &index);
     if(err != ESP_OK) return false;
-    efs = _efs[index];
-    return efs->mounted;
+    return _efs[index]->cache_size > 0;
 }
 
 esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, size_t *used_bytes){
@@ -204,9 +217,8 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
                 /* base_name not necessary for initializing */
                 .dont_mount = true, 
                 .partition_label = partition_label,
-                .max_files = 1
         };
-        err = esp_littlefs_init(&conf); /* Internally MIGHT esp_littlefs_format */
+        err = esp_littlefs_init(&conf); /* Internally MIGHT call esp_littlefs_format */
         if( err != ESP_OK ) {
             ESP_LOGE(TAG, "Failed to initialize to format.");
             goto exit;
@@ -223,7 +235,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
     assert( efs );
 
     /* Unmount if mounted */
-    if(efs->mounted){
+    if(efs->cache_size > 0){
         int res;
         ESP_LOGD(TAG, "Partition was mounted. Unmounting...");
         was_mounted = true;
@@ -232,7 +244,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             ESP_LOGE(TAG, "Failed to unmount.");
             return ESP_FAIL;
         }
-        efs->mounted = false;
+        esp_littlefs_freefs(efs);
     }
 
     /* Erase and Format */
@@ -257,6 +269,8 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             ESP_LOGE(TAG, "Failed to re-mount filesystem");
             return ESP_FAIL;
         }
+        efs->cache_size = 4;
+        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
     }
     ESP_LOGD(TAG, "Format Success!");
     
@@ -311,11 +325,11 @@ static void esp_littlefs_free(esp_littlefs_t ** efs)
     *efs = NULL;
 
     if (e->fs) {
-        if(e->mounted) lfs_unmount(e->fs);
+        if(e->cache_size > 0) lfs_unmount(e->fs);
         free(e->fs);
     }
     if(e->lock) vSemaphoreDelete(e->lock);
-    if(e->files) free(e->files);
+    esp_littlefs_freefs(e);
     free(e);
 }
 
@@ -463,12 +477,6 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         }
     }
 
-    if(conf->max_files > ABSOLUTE_MAX_NUM_FILES || conf->max_files <= 0) {
-        ESP_LOGE(TAG, "Max files must be in range (0, %d]. Provided %d", ABSOLUTE_MAX_NUM_FILES, conf->max_files);
-        err = ESP_ERR_INVALID_ARG;
-        goto exit;
-    }
-
     if ( NULL == conf->partition_label ) {
         ESP_LOGE(TAG, "Partition label must be provided.");
         err = ESP_ERR_INVALID_ARG;
@@ -501,7 +509,6 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         goto exit;
     }
     efs->partition = partition;
-    efs->max_files = conf->max_files;
 
     { /* LittleFS Configuration */
         efs->cfg.context = efs;
@@ -536,18 +543,10 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         goto exit;
     }
 
-    efs->files = calloc(conf->max_files, sizeof(vfs_littlefs_file_t));
-    if( efs->files == NULL ){
-        ESP_LOGE(TAG, "file descriptor buffers could not be malloced");
-        err = ESP_ERR_NO_MEM;
-        goto exit;
-    }
-
     // Mount and Error Check
     _efs[index] = efs;
     if(!conf->dont_mount){
-        int res;
-        res = lfs_mount(efs->fs, &efs->cfg);
+        int res = lfs_mount(efs->fs, &efs->cfg);
 
         if (conf->format_if_mount_failed && res != LFS_ERR_OK) {
             esp_err_t err;
@@ -565,7 +564,8 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             err = ESP_FAIL;
             goto exit;
         }
-        efs->mounted = true;
+        efs->cache_size = 4;
+        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
     }
 
     err = ESP_OK;
@@ -599,29 +599,76 @@ static int sem_give(esp_littlefs_t *efs) {
     return xSemaphoreGiveRecursive(efs->lock);
 }
 
+
+/* We are using a double allocation system here, which an array and a linked list. 
+   The array contains the pointer to the file descriptor (the index in the array is what's returned to the user).
+   The linked list is used for file descriptors.
+   This means that position of nodes in the list must stay consistent:
+   - Allocation is obvious (append to the list from the head, and realloc the pointers array)
+     There is still a O(N) search in the cache for a free position to store
+   - Searching is a O(1) process (good)
+   - Deallocation is more tricky. That is, for example, 
+     if you need to remove node 5 in a 12 nodes list, you'll have to:
+       1) Mark the 5th position as freed (if it's the last position of the array realloc smaller)
+       2) Walk the list until finding the pointer to the node O(N) and scrub the node so the chained list stays consistent
+       3) Deallocate the node 
+*/
 /**
  * @brief Get a file descriptor
- * @param[in,out] efs file system context
+ * @param[in,out] efs       file system context
+ * @param[in]     path_len  the length of the filepath in bytes (including terminating zero byte)
+ * @param[out]    file      pointer to a file that'll be filled with a file object
  * @return integer file descriptor. Returns -1 if a FD cannot be obtained.
+ * @warning This must be called with lock taken
  */
-static int esp_littlefs_get_fd(esp_littlefs_t *efs){
-    sem_take(efs);
-    ESP_LOGD(TAG, "Searching for a free FD [0,%d). fd_used mask: 0x%08X",
-            efs->max_files, (uint32_t)efs->fd_used);
-    for(uint8_t i=0; i < efs->max_files; i++){
-        bool used;
-        used = (efs->fd_used >> i) & 1;
-        if( !used ){
-            efs->fd_used |= 1 << i;
-            sem_give(efs);
-            ESP_LOGD(TAG, "Obtained free FD %d. fd_used mask: 0x%08x",
-                    i, (uint32_t)efs->fd_used);
-            return i;
+static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, const uint8_t path_len, vfs_littlefs_file_t ** file){
+    int i = -1;
+
+    /* Make sure we are space to store new fd */
+    if (efs->fd_count + 1 > efs->cache_size) {
+        /* Resize the cache */
+        vfs_littlefs_file_t ** new_cache = realloc(efs->cache, efs->cache_size * 2 * sizeof(*efs->cache));
+        if (!new_cache) {
+            ESP_LOGE(TAG, "Unable to allocate file cache");
+            return -1; /* If it fails here, no harm is done to the filesystem, so it's safe */
+        }
+        memset(&new_cache[efs->cache_size], 0, efs->cache_size * sizeof(*efs->cache));
+        efs->cache = new_cache;
+        efs->cache_size *= 2;
+    }
+
+
+    /* Allocate file descriptor here now */
+    *file = calloc(1, sizeof(**file) + path_len);
+    if (*file == NULL) {
+        /* If it fails here, the file system might have a larger cache, but it's harmless, no need to reverse it */
+        ESP_LOGE(TAG, "Unable to allocate FD");
+        return -1; 
+    }
+
+    /* Starting from here, nothing can fail anymore */
+
+    /* The trick here is to avoid dual allocation so the path pointer 
+        should point to the next byte after it:
+        file => [ lfs_file | # | next | path | free_space ]
+                                            |  /\
+                                            |__/
+    */
+    (*file)->path = (char*)((*file) + sizeof(**file));
+
+ 
+    /* Now find a free place in cache */
+    for(i=0; i < efs->cache_size; i++) {
+        if (efs->cache[i] == 0) {
+            efs->cache[i] = *file;
+            break;
         }
     }
-    sem_give(efs);
-    ESP_LOGE(TAG, "Unable to get a free FD");
-    return -1;
+    /* Save file in the list */
+    (*file)->next = efs->file;
+    efs->file = *file;
+    efs->fd_count++;
+    return i;
 }
 
 /**
@@ -629,26 +676,51 @@ static int esp_littlefs_get_fd(esp_littlefs_t *efs){
  * @param[in,out] efs file system context
  * @param[in] fd File Descriptor to release
  * @return 0 on success. -1 if a FD cannot be obtained.
+ * @warning This must be called with lock taken
  */
 static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return -1;
-    }
-
-    sem_take(efs);
-    if(!((efs->fd_used >> fd) && 0x01)) {
-        sem_give(efs);
+    vfs_littlefs_file_t * file, * head;
+    if((uint32_t)fd >= efs->cache_size) {
         ESP_LOGE(TAG, "FD was never allocated");
         return -1;
     }
 
-    ESP_LOGD(TAG, "Clearing FD");
-    memset(&efs->files[fd], 0, sizeof(vfs_littlefs_file_t));
-    efs->fd_used &= ~(1 << fd);
-    sem_give(efs);
+    /* Get the file descriptor to free it */
+    file = efs->cache[fd];
+    head = efs->file;
+    if (file == head) {
+        /* Last file, can't fail */
+        efs->file = efs->file->next;
+    } else {
+        while (head && head->next != file) {
+            head = head->next;
+        }
+        if (!head) {
+            ESP_LOGE(TAG, "Inconsistent list");
+            return -1;
+        }
+        /* Transaction starts here and can't fail anymore */ 
+        head->next = file->next;
+    }
+    efs->cache[fd] = 0;
+    efs->fd_count--;
+    /* TODO: Realloc smaller if its possible */
 
+    ESP_LOGD(TAG, "Clearing FD");
+    free(file);
     return 0;
+}
+/**
+ * @brief compute a hash of the given string.
+ * @param[in]   path the path to hash
+ * @returns the hash for this path */
+static uint32_t compute_hash(const char * path) {
+    uint32_t hash = 5381;
+    char c;
+
+    while ((c = *path++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash;
 }
 
 /**
@@ -656,29 +728,31 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
  * @param[in,out] efs file system context
  * @param[in] path File path to check.
  * @returns integer file descriptor. Returns -1 if not found.
+ * @warning This must be called with lock taken
  */
 static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
-    sem_take(efs);
-    for(uint8_t i=0; i < efs->max_files; i++){
-        bool used;
-        used = (efs->fd_used >> i) & 1;
-        if( used && 0 == strcmp(path, efs->files[i].path) ){
-            ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
-            return i;
+    uint32_t hash = compute_hash(path);
+    for(uint16_t i=0, j=0; i < efs->cache_size && j < efs->fd_count; i++){
+        if (efs->cache[i]) {
+            ++j; 
+            if (efs->cache[i]->hash == hash && strcmp(path, efs->cache[i]->path) == 0) {
+                ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
+                return i;
+            }
         }
     }
-    sem_give(efs);
     ESP_LOGD(TAG, "Unable to get a find FD for \"%s\"", path);
     return -1;
 }
 
-/*** Filesystem Hooks***/
+/*** Filesystem Hooks ***/
 
 static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) {
     /* Note: mode is currently unused */
     int fd=-1, lfs_flags, res;
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
     vfs_littlefs_file_t *file = NULL;
+    size_t path_len = strlen(path) + 1;
 
     assert(path);
 
@@ -689,26 +763,23 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
     /* Get a FD */
     sem_take(efs);
-    fd = esp_littlefs_get_fd(efs);
+    fd = esp_littlefs_allocate_fd(efs, (uint8_t)path_len, &file);
     if(fd < 0) {
         sem_give(efs);
         ESP_LOGE(TAG, "Error obtaining FD");
-        res = LFS_ERR_INVAL;
-        goto exit;
+        return LFS_ERR_INVAL;
     }
-    file = &efs->files[fd];
-
     /* Open File */
     res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
 
     if( res < 0 ) {
+        esp_littlefs_free_fd(efs, fd);
         sem_give(efs);
         ESP_LOGE(TAG, "Failed to open file. Error %s (%d)",
                 esp_littlefs_errno(res), res);
-        res = LFS_ERR_INVAL;
-        goto exit;
+        return LFS_ERR_INVAL;
     }
-    strlcpy(file->path, path, sizeof(file->path));
+    memcpy(file->path, path, path_len);
 
     if (!(lfs_flags & LFS_O_RDONLY)) {
         /* If this is being opened as not read-only */
@@ -716,12 +787,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     }
 
     sem_give(efs);
-
     return fd;
-
-exit:
-    if(fd>=0) esp_littlefs_free_fd(efs, fd);
-    return res;
 }
 
 static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t size) {
@@ -729,13 +795,14 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     ssize_t res;
     vfs_littlefs_file_t *file = NULL;
 
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return LFS_ERR_BADF;
-    }
 
     sem_take(efs);
-    file = &efs->files[fd];
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
     res = lfs_file_write(efs->fs, &file->file, data, size);
     sem_give(efs);
 
@@ -753,13 +820,14 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
     ssize_t res;
     vfs_littlefs_file_t *file = NULL;
 
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return LFS_ERR_BADF;
-    }
 
     sem_take(efs);
-    file = &efs->files[fd];
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
     res = lfs_file_read(efs->fs, &file->file, dst, size);
     sem_give(efs);
 
@@ -777,13 +845,13 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     int res;
     vfs_littlefs_file_t *file = NULL;
 
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
+    sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
         return LFS_ERR_BADF;
     }
-
-    sem_take(efs);
-    file = &efs->files[fd];
+    file = efs->cache[fd];
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
         sem_give(efs);
@@ -802,12 +870,6 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     vfs_littlefs_file_t *file = NULL;
     int whence;
 
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return LFS_ERR_BADF;
-    }
-    file = &efs->files[fd];
-
     switch (mode) {
         case SEEK_SET: whence = LFS_SEEK_SET; break;
         case SEEK_CUR: whence = LFS_SEEK_CUR; break;
@@ -818,6 +880,12 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     }
 
     sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
     res = lfs_file_seek(efs->fs, &file->file, offset, whence);
     sem_give(efs);
 
@@ -836,16 +904,17 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     int res;
     vfs_littlefs_file_t *file = NULL;
 
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "Max files must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return LFS_ERR_BADF;
-    }
-    file = &efs->files[fd];
 
     memset(st, 0, sizeof(struct stat));
     st->st_blksize = efs->cfg.block_size;
 
     sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
     res = lfs_stat(efs->fs, file->path, &info);
     sem_give(efs);
     if (res < 0) {
