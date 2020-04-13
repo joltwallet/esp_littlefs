@@ -61,7 +61,6 @@ static void setup_littlefs() {
     esp_vfs_littlefs_conf_t conf = {
         .base_path = "/littlefs",
         .partition_label = "flash_test",
-        .max_files = MAX_FILES,
         .format_if_mount_failed = true
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));

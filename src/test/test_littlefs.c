@@ -79,7 +79,6 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
-        .max_files = 5,
         .format_if_mount_failed = false
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
@@ -106,12 +105,11 @@ TEST_CASE("can read file", "[littlefs]")
 
 TEST_CASE("can open maximum number of files", "[littlefs]")
 {
-    size_t max_files = FOPEN_MAX - 3; /* account for stdin, stdout, stderr */
+    size_t max_files = 61;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
     const esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .format_if_mount_failed = true,
-        .max_files = max_files
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
     test_littlefs_open_max_files("/littlefs/f", max_files);
@@ -726,7 +724,6 @@ static void test_setup() {
     esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
-        .max_files = 5,
         .format_if_mount_failed = true
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));

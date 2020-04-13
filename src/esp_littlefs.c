@@ -55,7 +55,6 @@ static void    vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset);
 static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 static int     vfs_littlefs_fsync(void* ctx, int fd);
-static int     vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
@@ -64,9 +63,12 @@ static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 static int       esp_littlefs_flags_conv(int m);
+#if CONFIG_LITTLEFS_USE_MTIME
+static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 static void      vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
 static int       vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
 static time_t    vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
+#endif
 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 static int     vfs_littlefs_fstat(void* ctx, int fd, struct stat * st);
@@ -81,7 +83,7 @@ static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
 /********************
  * Helper Functions *
  ********************/
-void esp_littlefs_freefs(esp_littlefs_t * efs) {
+void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
     while (efs->file) {
         vfs_littlefs_file_t * next = efs->file->next;
@@ -248,7 +250,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             ESP_LOGE(TAG, "Failed to unmount.");
             return ESP_FAIL;
         }
-        esp_littlefs_freefs(efs);
+        esp_littlefs_free_fds(efs);
     }
 
     /* Erase and Format */
@@ -334,7 +336,7 @@ static void esp_littlefs_free(esp_littlefs_t ** efs)
         free(e->fs);
     }
     if(e->lock) vSemaphoreDelete(e->lock);
-    esp_littlefs_freefs(e);
+    esp_littlefs_free_fds(e);
     free(e);
 }
 
@@ -819,10 +821,12 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     memcpy(file->path, path, path_len);
 #endif
 
+#if CONFIG_LITTLEFS_USE_MTIME
     if (!(lfs_flags & LFS_O_RDONLY)) {
         /* If this is being opened as not read-only */
         vfs_littlefs_update_mtime(efs, path);
     }
+#endif
 
     sem_give(efs);
     return fd;
@@ -1013,7 +1017,9 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
         return res;
     }
     st->st_size = info.size;
+#if CONFIG_LITTLEFS_USE_MTIME    
     st->st_mtime = vfs_littlefs_get_mtime(efs, path);
+#endif
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
@@ -1341,6 +1347,7 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
     return res;
 }
 
+#if CONFIG_LITTLEFS_USE_MTIME
 /**
  * Sets the mtime attr to t.
  */
@@ -1361,13 +1368,10 @@ static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path
  */
 static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path)
 {
-#if CONFIG_LITTLEFS_USE_MTIME
     vfs_littlefs_utime(efs, path, NULL);
-#endif //CONFIG_LITTLEFS_USE_MTIME
 }
 
 
-#if CONFIG_LITTLEFS_USE_MTIME
 static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
