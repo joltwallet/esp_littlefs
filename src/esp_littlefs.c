@@ -960,6 +960,37 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     return res;
 }
 
+static int vfs_littlefs_fsync(void* ctx, int fd)
+{
+    esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
+    ssize_t res;
+    vfs_littlefs_file_t *file = NULL;
+
+
+    sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
+    res = lfs_file_sync(efs->fs, &file->file);
+    sem_give(efs);
+
+    if(res < 0){
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGE(TAG, "Failed to sync file \"%s\". Error %s (%d)",
+                file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGE(TAG, "Failed to sync file %d. Error %d", fd, res);
+#endif
+        return res;
+    }
+
+    return res;
+}
+
+
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1320,31 +1351,6 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     }
 
     return 0;
-}
-
-static int vfs_littlefs_fsync(void* ctx, int fd)
-{
-    esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
-    ssize_t res;
-    vfs_littlefs_file_t *file = NULL;
-
-    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
-        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
-        return LFS_ERR_BADF;
-    }
-
-    sem_take(efs);
-    file = &efs->files[fd];
-    res = lfs_file_sync(efs->fs, &file->file);
-    sem_give(efs);
-
-    if(res < 0){
-        ESP_LOGE(TAG, "Failed to sync file \"%s\". Error %s (%d)",
-                file->path, esp_littlefs_errno(res), res);
-        return res;
-    }
-
-    return res;
 }
 
 #if CONFIG_LITTLEFS_USE_MTIME
