@@ -8,7 +8,6 @@
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
-#include "esp_image_format.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -57,6 +56,7 @@ static long    vfs_littlefs_telldir(void* ctx, DIR* pdir);
 static void    vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset);
 static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
+static int     vfs_littlefs_fsync(void* ctx, int fd);
 static int     vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
@@ -132,6 +132,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .telldir_p   = &vfs_littlefs_telldir,
         .mkdir_p     = &vfs_littlefs_mkdir,
         .rmdir_p     = &vfs_littlefs_rmdir,
+        .fsync_p     = &vfs_littlefs_fsync,
 #ifdef CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
 #else
@@ -1142,6 +1143,31 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     }
 
     return 0;
+}
+
+static int vfs_littlefs_fsync(void* ctx, int fd)
+{
+    esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
+    ssize_t res;
+    vfs_littlefs_file_t *file = NULL;
+
+    if(fd > ABSOLUTE_MAX_NUM_FILES || fd < 0) {
+        ESP_LOGE(TAG, "FD must be <%d.", ABSOLUTE_MAX_NUM_FILES);
+        return LFS_ERR_BADF;
+    }
+
+    sem_take(efs);
+    file = &efs->files[fd];
+    res = lfs_file_sync(efs->fs, &file->file);
+    sem_give(efs);
+
+    if(res < 0){
+        ESP_LOGE(TAG, "Failed to sync file \"%s\". Error %s (%d)",
+                file->path, esp_littlefs_errno(res), res);
+        return res;
+    }
+
+    return res;
 }
 
 /**
