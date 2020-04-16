@@ -72,6 +72,14 @@ menu "LittleFS"
         default "y"
         help
             Saves heap memory but might cause files to prevent unlinking or renaming upon (unlikely) hash collision.
+            If enabled, functionality (fstat) that requires the file path will not work.
+
+    config LITTLEFS_HUMAN_READABLE
+        bool "Make errno human-readable"
+        default "n"
+        help
+            Converts LittleFS error codes into human readable strings.
+            May increase binary size depending on logging level.
 
     choice LITTLEFS_MTIME
         prompt "mtime attribute options"

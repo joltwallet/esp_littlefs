@@ -74,6 +74,8 @@ static time_t    vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
 static int     vfs_littlefs_fstat(void* ctx, int fd, struct stat * st);
 #endif
 
+const char * esp_littlefs_errno(enum lfs_error lfs_errno);
+
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
 
@@ -287,12 +289,12 @@ exit:
     return err;
 }
 
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 /**
  * @brief converts an enumerated lfs error into a string.
  * @param lfs_error The littlefs error.
  */
 const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
+#if CONFIG_LITTLEFS_HUMAN_READABLE
     switch(lfs_errno){
         case LFS_ERR_OK: return "LFS_ERR_OK";
         case LFS_ERR_IO: return "LFS_ERR_IO";
@@ -311,8 +313,10 @@ const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
         case LFS_ERR_NAMETOOLONG: return "LFS_ERR_NAMETOOLONG";
         default: return "LFS_ERR_UNDEFINED";
     }
-}
+#else
+    return "";
 #endif
+}
 
 /********************
  * Static Functions *
@@ -557,11 +561,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
 
         if (conf->format_if_mount_failed && res != LFS_ERR_OK) {
             esp_err_t err;
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-            ESP_LOGW(TAG, "mount failed, %i (%s). formatting...", res, esp_littlefs_errno(res));
-#else
-            ESP_LOGW(TAG, "mount failed, %i. formatting...", res);
-#endif
+            ESP_LOGW(TAG, "mount failed, %s (%i). formatting...", esp_littlefs_errno(res), res);
             err = esp_littlefs_format(efs->partition->label);
             if(err != ESP_OK) {
                 ESP_LOGE(TAG, "format failed");
@@ -571,11 +571,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             res = lfs_mount(efs->fs, &efs->cfg);
         }
         if (res != LFS_ERR_OK) {
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-            ESP_LOGE(TAG, "mount failed, %i (%s)", res, esp_littlefs_errno(res));
-#else
-            ESP_LOGE(TAG, "mount failed, %i", res);
-#endif
+            ESP_LOGE(TAG, "mount failed, %s (%i)", esp_littlefs_errno(res), res);
             err = ESP_FAIL;
             goto exit;
         }
@@ -809,12 +805,8 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     if( res < 0 ) {
         esp_littlefs_free_fd(efs, fd);
         sem_give(efs);
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, "Failed to open file. Error %s (%d)",
                 esp_littlefs_errno(res), res);
-#else
-        ESP_LOGE(TAG, "Failed to open file. Error %d", res);
-#endif
         return LFS_ERR_INVAL;
     }
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1038,13 +1030,8 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
     if (res < 0) {
         /* Not strictly an error, since stat can be used to check
          * if a file exists */
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGI(TAG, "Failed to stat path \"%s\". Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
-#else
-        ESP_LOGI(TAG, "Failed to stat path \"%s\". Error %d",
-                path, res);
-#endif
         return res;
     }
     st->st_size = info.size;
@@ -1066,12 +1053,8 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
     res = lfs_stat(efs->fs, path, &info);
     if (res < 0) {
         sem_give(efs);
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGE(TAG, fail_str_1 " Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
-#else
-        ESP_LOGE(TAG, fail_str_1 " Error %d", path, res);
-#endif
         return res;
     }
 
