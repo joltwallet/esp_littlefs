@@ -19,9 +19,9 @@ extern "C" {
  * That's also a singly linked list used for keeping tracks of all opened file descriptor 
  *
  * Shortcomings/potential issues of 32-bit hash (when CONFIG_LITTLEFS_USE_ONLY_HASH) listed here:
- *     * unlink - If a different file is open that generates a collision, it will report an
+ *     * unlink - If a different file is open that generates a hash collision, it will report an
  *                error that it cannot unlink an open file.
- *     * rename - If a different file is open that generates a collision with
+ *     * rename - If a different file is open that generates a hash collision with
  *                src or dst, it will report an error that it cannot rename an open file.
  * Potential consequences:
  *    1. A file cannot be deleted while a collision-geneating file is open.

@@ -380,7 +380,7 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
     test_teardown();
 }
 
-#if CONFIG_LITTLEFS_USE_MTIME
+#if CONFIG_LITTLEFS_USE_MTIME && !CONFIG_LITTLEFS_USE_ONLY_HASH
 
 #if CONFIG_LITTLEFS_MTIME_USE_SECONDS
 TEST_CASE("mtime support", "[littlefs]")
@@ -404,21 +404,25 @@ TEST_CASE("mtime support", "[littlefs]")
     time_t t_before_open = time(NULL);
     FILE *f = fopen(filename, "a");
     time_t t_after_open = time(NULL);
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
+#endif
     fclose(f);
 
     /* Wait a bit, open for reading, check that mtime is not updated */
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     time_t t_before_open_ro = time(NULL);
     f = fopen(filename, "r");
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(t_before_open_ro > t_after_open
              && st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
+#endif
     fclose(f);
 
     TEST_ASSERT_EQUAL(0, unlink(filename));

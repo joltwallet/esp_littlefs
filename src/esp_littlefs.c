@@ -16,6 +16,7 @@
 #include <sys/errno.h>
 #include <sys/fcntl.h>
 #include <sys/lock.h>
+#include <sys/param.h>
 #include "esp32/rom/spi_flash.h"
 #include "esp_system.h"
 
@@ -159,7 +160,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .mkdir_p     = &vfs_littlefs_mkdir,
         .rmdir_p     = &vfs_littlefs_rmdir,
         .fsync_p     = &vfs_littlefs_fsync,
-#ifdef CONFIG_LITTLEFS_USE_MTIME
+#if CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
 #else
         .utime_p     = NULL,
@@ -652,11 +653,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
 
     /* Make sure there is enough space in the cache to store new fd */
     if (efs->fd_count + 1 > efs->cache_size) {
-        uint16_t new_size = CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR * efs->cache_size;  // Number of elements, not number of bytes
-        if(new_size <= efs->cache_size) {
-            // Overflow occured
-            new_size = UINT16_MAX;
-        }
+        uint16_t new_size = (uint16_t)MIN(UINT16_MAX, CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR * efs->cache_size);
         /* Resize the cache */
         vfs_littlefs_file_t ** new_cache = realloc(efs->cache, new_size * sizeof(*efs->cache));
         if (!new_cache) {
@@ -747,9 +744,12 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     ESP_LOGD(TAG, "Clearing FD");
     free(file);
 
+#if 0
     /* Realloc smaller if its possible
      *     * Find and realloc based on number of trailing NULL ptrs in cache
      *     * Leave some hysteris to prevent thrashing around resize points
+     * This is disabled for now because it adds unnecessary complexity
+     * and binary size increase that outweights its ebenfits.
      */
     if(efs->cache_size > CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE) {
         uint16_t n_free;
@@ -776,11 +776,11 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
             }
         }
     }
+#endif
 
     return 0;
 }
 
-#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
 /**
  * @brief Compute the 32bit DJB2 hash of the given string.
  * @param[in]   path the path to hash
@@ -794,7 +794,6 @@ static uint32_t compute_hash(const char * path) {
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
     return hash;
 }
-#endif
 
 /**
  * @brief finds an open file descriptor by file name.
@@ -802,21 +801,24 @@ static uint32_t compute_hash(const char * path) {
  * @param[in] path File path to check.
  * @returns integer file descriptor. Returns -1 if not found.
  * @warning This must be called with lock taken
- * @warning if CONFIG_LITTLEFS_USE_ONLY_HASH, an erroneous FD may be returned
- *          on hash collision.
+ * @warning if CONFIG_LITTLEFS_USE_ONLY_HASH, there is a slim chance an
+ *          erroneous FD may be returned on hash collision.
  */
 static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
-#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
     uint32_t hash = compute_hash(path);
-#endif
+
     for(uint16_t i=0, j=0; i < efs->cache_size && j < efs->fd_count; i++){
         if (efs->cache[i]) {
             ++j; 
+            if(efs->cache[i]->hash == 0) {
+                ESP_LOGW(TAG, "Comparing against a hash of 0.");
+                assert(0);
+            }
+
             if (
-#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
-            efs->cache[i]->hash == hash
-#else
-            strcmp(path, efs->cache[i]->path) == 0
+                efs->cache[i]->hash == hash  // Faster than strcmp
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+                && strcmp(path, efs->cache[i]->path) == 0  // May as well check incase of hash collision. Usually short-circuited.
 #endif
             ) {
                 ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
@@ -867,6 +869,8 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
                 esp_littlefs_errno(res), res);
         return LFS_ERR_INVAL;
     }
+
+    file->hash = compute_hash(path);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     memcpy(file->path, path, path_len);
 #endif

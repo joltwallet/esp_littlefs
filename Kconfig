@@ -63,6 +63,7 @@ menu "LittleFS"
 
     config LITTLEFS_USE_MTIME
         bool "Save file modification time"
+        depends on !LITTLEFS_USE_ONLY_HASH
         default "y"
         help
             Saves timestamp on modification. Uses an additional 4bytes.
