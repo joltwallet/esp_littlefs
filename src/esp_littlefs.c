@@ -1148,7 +1148,7 @@ static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
         ESP_LOGE(TAG, "Cannot rename; src \"%s\" is open.", src);
         return -1;
     }
-    else if(esp_littlefs_get_fd_by_name(efs, src) >= 0){
+    else if(esp_littlefs_get_fd_by_name(efs, dst) >= 0){
         sem_give(efs);
         ESP_LOGE(TAG, "Cannot rename; dst \"%s\" is open.", dst);
         return -1;
