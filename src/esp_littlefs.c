@@ -26,6 +26,11 @@ static const char TAG[] = "esp_littlefs";
 
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
+/* File Descriptor Caching Params */
+#define CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR 2  /* Amount to resize FD cache by */
+#define CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE 4  /* Minimum size of FD cache */
+#define CONFIG_LITTLEFS_FD_CACHE_HYST 4  /* When shrinking, leave this many trailing FD slots available */
+
 /**
  * @brief littlefs DIR structure
  */
@@ -277,7 +282,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             ESP_LOGE(TAG, "Failed to re-mount filesystem");
             return ESP_FAIL;
         }
-        efs->cache_size = 4;  // Initial size of cache, will grow if need be
+        efs->cache_size = CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE;  // Initial size of cache; will resize ondemand
         efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
     }
     ESP_LOGD(TAG, "Format Success!");
@@ -646,7 +651,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
 
     /* Make sure there is enough space in the cache to store new fd */
     if (efs->fd_count + 1 > efs->cache_size) {
-        uint16_t new_size = 2 * efs->cache_size;  // Number of elements, not number of bytes
+        uint16_t new_size = CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR * efs->cache_size;  // Number of elements, not number of bytes
         if(new_size <= efs->cache_size) {
             // Overflow occured
             new_size = UINT16_MAX;
@@ -711,14 +716,16 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
  */
 static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     vfs_littlefs_file_t * file, * head;
+
     if((uint32_t)fd >= efs->cache_size) {
-        ESP_LOGE(TAG, "FD was never allocated");
+        ESP_LOGE(TAG, "FD exceeds cache size");
         return -1;
     }
 
     /* Get the file descriptor to free it */
     file = efs->cache[fd];
     head = efs->file;
+    /* Search for file in SLL to remove it */
     if (file == head) {
         /* Last file, can't fail */
         efs->file = efs->file->next;
@@ -733,12 +740,42 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
         /* Transaction starts here and can't fail anymore */ 
         head->next = file->next;
     }
-    efs->cache[fd] = 0;
+    efs->cache[fd] = NULL;
     efs->fd_count--;
-    /* TODO: Realloc smaller if its possible */
 
     ESP_LOGD(TAG, "Clearing FD");
     free(file);
+
+    /* Realloc smaller if its possible
+     *     * Find and realloc based on number of trailing NULL ptrs in cache
+     *     * Leave some hysteris to prevent thrashing around resize points
+     */
+    if(efs->cache_size > CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE) {
+        uint16_t n_free;
+        uint16_t new_size = efs->cache_size / CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR;
+
+        if(new_size >= CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE) {
+            /* Count number of trailing NULL ptrs */
+            for(n_free=0; n_free < efs->cache_size; n_free++) {
+                if(efs->cache[efs->cache_size - n_free - 1] != NULL) {
+                    break;
+                }
+            }
+
+            if(n_free >= (efs->cache_size - new_size)){
+                new_size += CONFIG_LITTLEFS_FD_CACHE_HYST;
+                ESP_LOGD(TAG, "Reallocating cache %i -> %i", efs->cache_size, new_size);
+                vfs_littlefs_file_t ** new_cache;
+                new_cache = realloc(efs->cache, new_size * sizeof(*efs->cache));
+                /* No harm on realloc failure, continue using the oversized cache */
+                if(new_cache) {
+                    efs->cache = new_cache;
+                    efs->cache_size = new_size;
+                }
+            }
+        }
+    }
+
     return 0;
 }
 
