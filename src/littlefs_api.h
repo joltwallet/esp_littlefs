@@ -16,12 +16,24 @@ extern "C" {
 
 /**
  * @brief a file descriptor
- * That's also a chained list used for keeping tracks of all opened file descriptor 
+ * That's also a singly linked list used for keeping tracks of all opened file descriptor 
+ *
+ * Shortcomings/potential issues of 32-bit hash (when CONFIG_LITTLEFS_USE_ONLY_HASH) listed here:
+ *     * unlink - If a different file is open that generates a collision, it will report an
+ *                error that it cannot unlink an open file.
+ *     * rename - If a different file is open that generates a collision with
+ *                src or dst, it will report an error that it cannot rename an open file.
+ * Potential consequences:
+ *    1. A file cannot be deleted while a collision-geneating file is open.
+ *       Worst-case, if the other file is always open during the lifecycle
+ *       of your app, it's collision file cannot be deleted, which in the 
+ *       worst-case could cause storage-capacity issues.
+ *    2. Same as (1), but for renames
  */
 typedef struct _vfs_littlefs_file_t {
     lfs_file_t file;
     uint32_t   hash;
-    struct _vfs_littlefs_file_t * next;
+    struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     char     * path;
 #endif
@@ -37,7 +49,9 @@ typedef struct {
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
 
     struct lfs_config cfg;                    /*!< littlefs Mount configuration */
-    vfs_littlefs_file_t *file;                /*!< List of files */
+
+    vfs_littlefs_file_t *file;                /*!< Singly Linked List of files */
+
     vfs_littlefs_file_t **cache;              /*!< A cache of pointers to the opened files */
     uint16_t             cache_size;          /*!< The cache allocated size (in pointers) */
     uint16_t             fd_count;            /*!< The count of opened file descriptor used to speed up computation */
