@@ -277,7 +277,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             ESP_LOGE(TAG, "Failed to re-mount filesystem");
             return ESP_FAIL;
         }
-        efs->cache_size = 4;
+        efs->cache_size = 4;  // Initial size of cache, will grow if need be
         efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
     }
     ESP_LOGD(TAG, "Format Success!");
@@ -598,7 +598,7 @@ exit:
  * @brief
  * @parameter efs file system context
  */
-static int sem_take(esp_littlefs_t *efs) {
+static inline int sem_take(esp_littlefs_t *efs) {
     return xSemaphoreTakeRecursive(efs->lock, portMAX_DELAY);
 }
 
@@ -606,7 +606,7 @@ static int sem_take(esp_littlefs_t *efs) {
  * @brief
  * @parameter efs file system context
  */
-static int sem_give(esp_littlefs_t *efs) {
+static inline int sem_give(esp_littlefs_t *efs) {
     return xSemaphoreGiveRecursive(efs->lock);
 }
 
@@ -624,33 +624,43 @@ static int sem_give(esp_littlefs_t *efs) {
        2) Walk the list until finding the pointer to the node O(N) and scrub the node so the chained list stays consistent
        3) Deallocate the node 
 */
+
 /**
  * @brief Get a file descriptor
  * @param[in,out] efs       file system context
- * @param[in]     path_len  the length of the filepath in bytes (including terminating zero byte)
  * @param[out]    file      pointer to a file that'll be filled with a file object
+ * @param[in]     path_len  the length of the filepath in bytes (including terminating zero byte)
  * @return integer file descriptor. Returns -1 if a FD cannot be obtained.
  * @warning This must be called with lock taken
  */
 static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** file
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-  , const uint8_t path_len
+  , const size_t path_len
 #endif
     )
 {
     int i = -1;
 
-    /* Make sure we are space to store new fd */
+    assert( efs->fd_count < UINT16_MAX );
+    assert( efs->cache_size < UINT16_MAX );
+
+    /* Make sure there is enough space in the cache to store new fd */
     if (efs->fd_count + 1 > efs->cache_size) {
+        uint16_t new_size = 2 * efs->cache_size;  // Number of elements, not number of bytes
+        if(new_size <= efs->cache_size) {
+            // Overflow occured
+            new_size = UINT16_MAX;
+        }
         /* Resize the cache */
-        vfs_littlefs_file_t ** new_cache = realloc(efs->cache, efs->cache_size * 2 * sizeof(*efs->cache));
+        vfs_littlefs_file_t ** new_cache = realloc(efs->cache, new_size * sizeof(*efs->cache));
         if (!new_cache) {
             ESP_LOGE(TAG, "Unable to allocate file cache");
             return -1; /* If it fails here, no harm is done to the filesystem, so it's safe */
         }
-        memset(&new_cache[efs->cache_size], 0, efs->cache_size * sizeof(*efs->cache));
+        /* Zero out the new portions of the cache */
+        memset(&new_cache[efs->cache_size], 0, (new_size - efs->cache_size) * sizeof(*efs->cache));
         efs->cache = new_cache;
-        efs->cache_size *= 2;
+        efs->cache_size = new_size;
     }
 
 
@@ -680,7 +690,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
  
     /* Now find a free place in cache */
     for(i=0; i < efs->cache_size; i++) {
-        if (efs->cache[i] == 0) {
+        if (efs->cache[i] == NULL) {
             efs->cache[i] = *file;
             break;
         }
@@ -731,10 +741,12 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     free(file);
     return 0;
 }
+
 /**
- * @brief compute a hash of the given string.
+ * @brief Compute the 32bit DJB2 hash of the given string.
  * @param[in]   path the path to hash
- * @returns the hash for this path */
+ * @returns the hash for this path 
+ */
 static uint32_t compute_hash(const char * path) {
     uint32_t hash = 5381;
     char c;
@@ -778,7 +790,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
     vfs_littlefs_file_t *file = NULL;
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-    size_t path_len = strlen(path) + 1;
+    size_t path_len = strlen(path) + 1;  // include NULL terminator
 #endif
     assert(path);
 
@@ -791,7 +803,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     sem_take(efs);
     fd = esp_littlefs_allocate_fd(efs, &file
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-    , (uint8_t)path_len
+    , path_len
 #endif
     );
     if(fd < 0) {
