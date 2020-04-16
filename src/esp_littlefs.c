@@ -321,7 +321,7 @@ const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
     return "";
 }
 #else
-#define esp_littelfs_errno(x) ""
+#define esp_littlefs_errno(x) ""
 #endif
 
 /********************
@@ -780,6 +780,7 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     return 0;
 }
 
+#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
 /**
  * @brief Compute the 32bit DJB2 hash of the given string.
  * @param[in]   path the path to hash
@@ -793,6 +794,7 @@ static uint32_t compute_hash(const char * path) {
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
     return hash;
 }
+#endif
 
 /**
  * @brief finds an open file descriptor by file name.
@@ -804,15 +806,17 @@ static uint32_t compute_hash(const char * path) {
  *          on hash collision.
  */
 static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
+#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
     uint32_t hash = compute_hash(path);
+#endif
     for(uint16_t i=0, j=0; i < efs->cache_size && j < efs->fd_count; i++){
         if (efs->cache[i]) {
             ++j; 
             if (
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-            strcmp(path, efs->cache[i]->path) == 0
-#else
+#ifdef CONFIG_LITTLEFS_USE_ONLY_HASH
             efs->cache[i]->hash == hash
+#else
+            strcmp(path, efs->cache[i]->path) == 0
 #endif
             ) {
                 ESP_LOGD(TAG, "Found \"%s\" at FD %d.", path, i);
@@ -1062,7 +1066,9 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
         return res;
     }
     st->st_size = info.size;
+#if CONFIG_LITTLEFS_USE_MTIME  
     st->st_mtime = vfs_littlefs_get_mtime(efs, file->path);
+#endif
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
