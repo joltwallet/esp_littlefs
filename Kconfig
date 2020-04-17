@@ -69,7 +69,7 @@ menu "LittleFS"
     
     config LITTLEFS_USE_ONLY_HASH
         bool "Don't store filepath in the file descriptor"
-        default "y"
+        default "n"
         help
             Records the filepath only as a 32-bit hash in the file descriptor instead
             of the entire filepath. Saves approximately `sizeof(filepath)` bytes
