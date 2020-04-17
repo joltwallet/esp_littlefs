@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-//#define ESP_LOCAL_LOG_LEVEL 4
+//#define LOG_LOCAL_LEVEL 4
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -22,6 +22,7 @@
 
 #include "esp_littlefs.h"
 #include "littlefs_api.h"
+
 
 static const char TAG[] = "esp_littlefs";
 
@@ -206,6 +207,7 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
         return err;
     }
     esp_littlefs_free(&_efs[index]);
+    _efs[index] = NULL;
     return ESP_OK;
 }
 
@@ -673,6 +675,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
 #else
     *file = calloc(1, sizeof(**file));
 #endif
+
     if (*file == NULL) {
         /* If it fails here, the file system might have a larger cache, but it's harmless, no need to reverse it */
         ESP_LOGE(TAG, "Unable to allocate FD");
@@ -688,7 +691,7 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
                                             |  /\
                                             |__/
     */
-    (*file)->path = (char*)((*file) + sizeof(**file));
+    (*file)->path = (char*)(*file) + sizeof(**file);
 #endif
  
     /* Now find a free place in cache */
