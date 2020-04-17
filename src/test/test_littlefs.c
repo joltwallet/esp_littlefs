@@ -1,3 +1,5 @@
+//#define LOG_LOCAL_LEVEL 4
+
 #include "esp_littlefs.h"
 
 #include <stdio.h>
@@ -149,16 +151,32 @@ TEST_CASE("can lseek", "[littlefs]")
 }
 
 
-TEST_CASE("stat returns correct values", "[littlefs]")
+TEST_CASE("stat/fstat returns correct values", "[littlefs]")
 {
     test_setup();
     const char filename[] = littlefs_base_path "/stat.txt";
 
     test_littlefs_create_file_with_text(filename, "foo\n");
     struct stat st;
-    TEST_ASSERT_EQUAL(0, stat(filename, &st));
-    TEST_ASSERT(st.st_mode & S_IFREG);
-    TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
+    for(uint8_t i=0; i < 2; i++) {
+        if(i == 0){
+            // Test stat
+            TEST_ASSERT_EQUAL(0, stat(filename, &st));
+        }
+        else {
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+            // Test fstat
+            FILE *f = fopen(filename, "r");
+            TEST_ASSERT_NOT_NULL(f);
+            TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+            fclose(f);
+#endif
+        }
+        TEST_ASSERT(st.st_mode & S_IFREG);
+        TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
+        TEST_ASSERT_EQUAL(4, st.st_size);
+        // TODO: test mtime for fstat
+    }
 
     test_teardown();
 }
@@ -376,7 +394,7 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
     test_teardown();
 }
 
-#if CONFIG_LITTLEFS_USE_MTIME && !CONFIG_LITTLEFS_USE_ONLY_HASH
+#if CONFIG_LITTLEFS_USE_MTIME
 
 #if CONFIG_LITTLEFS_MTIME_USE_SECONDS
 TEST_CASE("mtime support", "[littlefs]")
@@ -400,7 +418,7 @@ TEST_CASE("mtime support", "[littlefs]")
     time_t t_before_open = time(NULL);
     FILE *f = fopen(filename, "a");
     time_t t_after_open = time(NULL);
-    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
@@ -410,7 +428,7 @@ TEST_CASE("mtime support", "[littlefs]")
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     time_t t_before_open_ro = time(NULL);
     f = fopen(filename, "r");
-    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(t_before_open_ro > t_after_open
              && st.st_mtime >= t_before_open
@@ -441,7 +459,7 @@ TEST_CASE("mnonce support", "[littlefs]")
     /* open again, check that mtime is updated */
     int nonce2;
     FILE *f = fopen(filename, "a");
-    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
     nonce2 = (int) st.st_mtime;
     printf("mtime=%d\n", nonce2);
     if( nonce1 == UINT32_MAX ) {
@@ -455,7 +473,7 @@ TEST_CASE("mnonce support", "[littlefs]")
     /* open for reading, check that mtime is not updated */
     int nonce3;
     f = fopen(filename, "r");
-    TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
+    TEST_ASSERT_EQUAL(0, stat(filename, &st));
     nonce3 = (int) st.st_mtime;
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT_EQUAL_INT(nonce2, nonce3);
@@ -667,10 +685,11 @@ done:
 
 static void test_littlefs_concurrent(const char* filename_prefix)
 {
+#define TASK_SIZE 4096
     char names[4][64];
     for (size_t i = 0; i < 4; ++i) {
         snprintf(names[i], sizeof(names[i]), "%s%d", filename_prefix, i + 1);
-        unlink(names[i]);
+        unlink(names[i]);  // Make sure these files don't exist
     }
 
     read_write_test_arg_t args1 = READ_WRITE_TEST_ARG_INIT(names[0], 1);
@@ -679,8 +698,8 @@ static void test_littlefs_concurrent(const char* filename_prefix)
     printf("writing f1 and f2\n");
     const int cpuid_0 = 0;
     const int cpuid_1 = portNUM_PROCESSORS - 1;
-    xTaskCreatePinnedToCore(&read_write_task, "rw1", 2048, &args1, 3, NULL, cpuid_0);
-    xTaskCreatePinnedToCore(&read_write_task, "rw2", 2048, &args2, 3, NULL, cpuid_1);
+    xTaskCreatePinnedToCore(&read_write_task, "rw1", TASK_SIZE, &args1, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw2", TASK_SIZE, &args2, 3, NULL, cpuid_1);
 
     xSemaphoreTake(args1.done, portMAX_DELAY);
     printf("f1 done\n");
@@ -696,10 +715,10 @@ static void test_littlefs_concurrent(const char* filename_prefix)
 
     printf("reading f1 and f2, writing f3 and f4\n");
 
-    xTaskCreatePinnedToCore(&read_write_task, "rw3", 2048, &args3, 3, NULL, cpuid_1);
-    xTaskCreatePinnedToCore(&read_write_task, "rw4", 2048, &args4, 3, NULL, cpuid_0);
-    xTaskCreatePinnedToCore(&read_write_task, "rw1", 2048, &args1, 3, NULL, cpuid_0);
-    xTaskCreatePinnedToCore(&read_write_task, "rw2", 2048, &args2, 3, NULL, cpuid_1);
+    xTaskCreatePinnedToCore(&read_write_task, "rw3", TASK_SIZE, &args3, 3, NULL, cpuid_1);
+    xTaskCreatePinnedToCore(&read_write_task, "rw4", TASK_SIZE, &args4, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw1", TASK_SIZE, &args1, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "rw2", TASK_SIZE, &args2, 3, NULL, cpuid_1);
 
     xSemaphoreTake(args1.done, portMAX_DELAY);
     printf("f1 done\n");
@@ -718,6 +737,7 @@ static void test_littlefs_concurrent(const char* filename_prefix)
     vSemaphoreDelete(args2.done);
     vSemaphoreDelete(args3.done);
     vSemaphoreDelete(args4.done);
+#undef TASK_SIZE
 }
 
 static void test_setup() {

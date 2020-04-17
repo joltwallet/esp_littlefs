@@ -608,7 +608,15 @@ exit:
  * @parameter efs file system context
  */
 static inline int sem_take(esp_littlefs_t *efs) {
-    return xSemaphoreTakeRecursive(efs->lock, portMAX_DELAY);
+    int res;
+#if LOG_LOCAL_LEVEL >= 4
+    ESP_LOGD(TAG, "------------------------ Sem Taking [%s]", pcTaskGetTaskName(NULL));
+#endif
+    res = xSemaphoreTakeRecursive(efs->lock, portMAX_DELAY);
+#if LOG_LOCAL_LEVEL >= 4
+    ESP_LOGD(TAG, "--------------------->>> Sem Taken [%s]", pcTaskGetTaskName(NULL));
+#endif
+    return res;
 }
 
 /**
@@ -616,6 +624,7 @@ static inline int sem_take(esp_littlefs_t *efs) {
  * @parameter efs file system context
  */
 static inline int sem_give(esp_littlefs_t *efs) {
+    ESP_LOGD(TAG, "---------------------<<< Sem Give [%s]", pcTaskGetTaskName(NULL));
     return xSemaphoreGiveRecursive(efs->lock);
 }
 
@@ -813,10 +822,6 @@ static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
     for(uint16_t i=0, j=0; i < efs->cache_size && j < efs->fd_count; i++){
         if (efs->cache[i]) {
             ++j; 
-            if(efs->cache[i]->hash == 0) {
-                ESP_LOGW(TAG, "Comparing against a hash of 0.");
-                assert(0);
-            }
 
             if (
                 efs->cache[i]->hash == hash  // Faster than strcmp
@@ -886,6 +891,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #endif
 
     sem_give(efs);
+    ESP_LOGD(TAG, "Done opening %s", path);
     return fd;
 }
 
@@ -893,7 +899,6 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     ssize_t res;
     vfs_littlefs_file_t *file = NULL;
-
 
     sem_take(efs);
     if((uint32_t)fd > efs->cache_size) {
@@ -950,6 +955,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
 }
 
 static int vfs_littlefs_close(void* ctx, int fd) {
+    // TODO update mtime on close? SPIFFS doesn't do this
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     int res;
     vfs_littlefs_file_t *file = NULL;
@@ -1066,16 +1072,20 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     }
     file = efs->cache[fd];
     res = lfs_stat(efs->fs, file->path, &info);
-    sem_give(efs);
     if (res < 0) {
+        sem_give(efs);
         ESP_LOGE(TAG, "Failed to stat file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
         return res;
     }
-    st->st_size = info.size;
+
 #if CONFIG_LITTLEFS_USE_MTIME  
     st->st_mtime = vfs_littlefs_get_mtime(efs, file->path);
 #endif
+
+    sem_give(efs);
+
+    st->st_size = info.size;
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
@@ -1314,12 +1324,8 @@ static void vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset) {
         res = lfs_dir_rewind(efs->fs, &dir->d);
         sem_give(efs);
         if (res < 0) {
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH 
             ESP_LOGE(TAG, "Failed to rewind dir \"%s\". Error %s (%d)",
                     dir->path, esp_littlefs_errno(res), res);
-#else
-            ESP_LOGE(TAG, "Failed to rewind dir \"%s\". Error %d", dir->path, res);
-#endif
             return;
         }
         dir->offset = 0;
@@ -1345,12 +1351,8 @@ static int vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode) {
     res = lfs_mkdir(efs->fs, name);
     sem_give(efs);
     if (res < 0) {
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH 
         ESP_LOGE(TAG, "Failed to mkdir \"%s\". Error %s (%d)",
                 name, esp_littlefs_errno(res), res);
-#else
-        ESP_LOGE(TAG, "Failed to mkdir \"%s\". Error %d", name, res);
-#endif
         return res;
     }
     return 0;
@@ -1380,12 +1382,8 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     res = lfs_remove(efs->fs, name);
     sem_give(efs);
     if ( res < 0) {
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH 
         ESP_LOGE(TAG, "Failed to unlink path \"%s\". Error %s (%d)",
                 name, esp_littlefs_errno(res), res);
-#else
-        ESP_LOGE(TAG, "Failed to unlink path \"%s\". Error %d", name, res);
-#endif
         return -1;
     }
 
