@@ -16,6 +16,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "esp_heap_caps.h"
 #include "esp_partition.h"
 #include "errno.h"
 
@@ -76,7 +77,7 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
 
     esp_littlefs_format(part->label);
     // Don't use test_setup here, need to mount without formatting
-    esp_vfs_littlefs_conf_t conf = {
+    const esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .format_if_mount_failed = false
@@ -105,15 +106,10 @@ TEST_CASE("can read file", "[littlefs]")
 
 TEST_CASE("can open maximum number of files", "[littlefs]")
 {
-    size_t max_files = 61;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
-    const esp_vfs_littlefs_conf_t conf = {
-        .base_path = littlefs_base_path,
-        .partition_label = littlefs_test_partition_label,
-        .format_if_mount_failed = true,
-    };
-    TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+    size_t max_files = 31;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
+    test_setup();
     test_littlefs_open_max_files("/littlefs/f", max_files);
-    TEST_ESP_OK(esp_vfs_littlefs_unregister(littlefs_test_partition_label));
+    test_teardown();
 }
 
 TEST_CASE("overwrite and append file", "[littlefs]")
@@ -404,25 +400,21 @@ TEST_CASE("mtime support", "[littlefs]")
     time_t t_before_open = time(NULL);
     FILE *f = fopen(filename, "a");
     time_t t_after_open = time(NULL);
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
-#endif
     fclose(f);
 
     /* Wait a bit, open for reading, check that mtime is not updated */
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     time_t t_before_open_ro = time(NULL);
     f = fopen(filename, "r");
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(t_before_open_ro > t_after_open
              && st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
-#endif
     fclose(f);
 
     TEST_ASSERT_EQUAL(0, unlink(filename));
@@ -596,16 +588,20 @@ static void test_littlefs_readdir_many_files(const char* dir_prefix)
 static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count)
 {
     FILE** files = calloc(files_count, sizeof(FILE*));
+    assert(files);
     for (size_t i = 0; i < files_count; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "%s_%d.txt", filename_prefix, i);
         printf("Opening \"%s\"\n", name);
+        TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
         files[i] = fopen(name, "w");
         TEST_ASSERT_NOT_NULL(files[i]);
+        TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     }
     /* close everything and clean up */
     for (size_t i = 0; i < files_count; ++i) {
         fclose(files[i]);
+        TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     }
     free(files);
 }
@@ -725,17 +721,19 @@ static void test_littlefs_concurrent(const char* filename_prefix)
 }
 
 static void test_setup() {
-    esp_vfs_littlefs_conf_t conf = {
+    const esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
         .format_if_mount_failed = true
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     printf("Test setup complete.\n");
 }
 
 static void test_teardown(){
     TEST_ESP_OK(esp_vfs_littlefs_unregister(littlefs_test_partition_label));
+    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     printf("Test teardown complete.\n");
 }
 
