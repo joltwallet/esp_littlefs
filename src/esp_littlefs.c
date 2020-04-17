@@ -624,7 +624,9 @@ static inline int sem_take(esp_littlefs_t *efs) {
  * @parameter efs file system context
  */
 static inline int sem_give(esp_littlefs_t *efs) {
+#if LOG_LOCAL_LEVEL >= 4
     ESP_LOGD(TAG, "---------------------<<< Sem Give [%s]", pcTaskGetTaskName(NULL));
+#endif
     return xSemaphoreGiveRecursive(efs->lock);
 }
 
