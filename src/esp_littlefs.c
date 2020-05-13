@@ -1104,18 +1104,19 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
 
     sem_take(efs);
     res = lfs_stat(efs->fs, path, &info);
-    sem_give(efs);
     if (res < 0) {
+        sem_give(efs);
         /* Not strictly an error, since stat can be used to check
          * if a file exists */
         ESP_LOGI(TAG, "Failed to stat path \"%s\". Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
         return res;
     }
-    st->st_size = info.size;
 #if CONFIG_LITTLEFS_USE_MTIME    
     st->st_mtime = vfs_littlefs_get_mtime(efs, path);
 #endif
+    sem_give(efs);
+    st->st_size = info.size;
     st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
     return 0;
 }
