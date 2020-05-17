@@ -735,6 +735,10 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
 
     read_write_test_arg_t args5 = READ_WRITE_TEST_ARG_INIT(names[0], 3);
     args5.action = CONCURRENT_TASK_ACTION_STAT;
+    args5.word_count = 300;
+    read_write_test_arg_t args6 = READ_WRITE_TEST_ARG_INIT(names[0], 3);
+    args6.action = CONCURRENT_TASK_ACTION_STAT;
+    args6.word_count = 300;
 
     printf("reading f1 and f2, writing f3 and f4, stating f1 concurrently from 2 cores\n");
 
@@ -744,7 +748,7 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
     xTaskCreatePinnedToCore(&read_write_task, "rw2", TASK_SIZE, &args2, 3, NULL, cpuid_1);
 
     xTaskCreatePinnedToCore(&read_write_task, "stat1", TASK_SIZE, &args5, 3, NULL, cpuid_0);
-    xTaskCreatePinnedToCore(&read_write_task, "stat2", TASK_SIZE, &args5, 3, NULL, cpuid_1);
+    xTaskCreatePinnedToCore(&read_write_task, "stat2", TASK_SIZE, &args6, 3, NULL, cpuid_1);
 
 
     xSemaphoreTake(args1.done, portMAX_DELAY);
@@ -758,7 +762,14 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
     TEST_ASSERT_EQUAL(ESP_OK, args3.result);
     xSemaphoreTake(args4.done, portMAX_DELAY);
     printf("f4 done\n");
-    TEST_ASSERT_EQUAL(ESP_OK, args4.result);
+
+    TEST_ASSERT_EQUAL(ESP_OK, args5.result);
+    xSemaphoreTake(args5.done, portMAX_DELAY);
+    printf("stat1 done\n");
+    TEST_ASSERT_EQUAL(ESP_OK, args6.result);
+    xSemaphoreTake(args6.done, portMAX_DELAY);
+    printf("stat2 done\n");
+
 
     vSemaphoreDelete(args1.done);
     vSemaphoreDelete(args2.done);
