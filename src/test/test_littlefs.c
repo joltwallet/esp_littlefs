@@ -32,7 +32,7 @@ static void test_littlefs_overwrite_append(const char* filename);
 static void test_littlefs_read_file(const char* filename);
 static void test_littlefs_readdir_many_files(const char* dir_prefix);
 static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count);
-static void test_littlefs_concurrent(const char* filename_prefix);
+static void test_littlefs_concurrent_rw(const char* filename_prefix);
 static void test_setup();
 static void test_teardown();
 
@@ -390,7 +390,7 @@ TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
 TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 {
     test_setup();
-    test_littlefs_concurrent(littlefs_base_path "/f");
+    test_littlefs_concurrent_rw(littlefs_base_path "/f");
     test_teardown();
 }
 
@@ -624,9 +624,15 @@ static void test_littlefs_open_max_files(const char* filename_prefix, size_t fil
     free(files);
 }
 
+typedef enum {
+    CONCURRENT_TASK_ACTION_READ,
+    CONCURRENT_TASK_ACTION_WRITE,
+    CONCURRENT_TASK_ACTION_STAT,
+} concurrent_task_action_t;
+
 typedef struct {
     const char* filename;
-    bool write;
+    concurrent_task_action_t action;
     size_t word_count;
     int seed;
     SemaphoreHandle_t done;
@@ -638,30 +644,34 @@ typedef struct {
             .filename = name, \
             .seed = seed_, \
             .word_count = 4096, \
-            .write = true, \
+            .action = CONCURRENT_TASK_ACTION_WRITE, \
             .done = xSemaphoreCreateBinary() \
         }
 
 static void read_write_task(void* param)
 {
+    FILE *f = NULL;
     read_write_test_arg_t* args = (read_write_test_arg_t*) param;
-    FILE* f = fopen(args->filename, args->write ? "wb" : "rb");
-    if (f == NULL) {
-        args->result = ESP_ERR_NOT_FOUND;
-        goto done;
+    if (args->action == CONCURRENT_TASK_ACTION_WRITE) {
+        f = fopen(args->filename, "wb");
+        if (f == NULL) {args->result = ESP_ERR_NOT_FOUND; goto done;}
+    } else if (args->action == CONCURRENT_TASK_ACTION_READ) {
+        f = fopen(args->filename, "rb");
+        if (f == NULL) {args->result = ESP_ERR_NOT_FOUND; goto done;}
+    } else if (args->action == CONCURRENT_TASK_ACTION_STAT) {
     }
 
     srand(args->seed);
     for (size_t i = 0; i < args->word_count; ++i) {
         uint32_t val = rand();
-        if (args->write) {
+        if (args->action == CONCURRENT_TASK_ACTION_WRITE) {
             int cnt = fwrite(&val, sizeof(val), 1, f);
             if (cnt != 1) {
                 ets_printf("E(w): i=%d, cnt=%d val=%d\n\n", i, cnt, val);
                 args->result = ESP_FAIL;
                 goto close;
             }
-        } else {
+        } else if (args->action == CONCURRENT_TASK_ACTION_READ) {
             uint32_t rval;
             int cnt = fread(&rval, sizeof(rval), 1, f);
             if (cnt != 1) {
@@ -669,12 +679,20 @@ static void read_write_task(void* param)
                 args->result = ESP_FAIL;
                 goto close;
             }
+        } else if (args->action == CONCURRENT_TASK_ACTION_STAT) {
+            int res;
+            struct stat buf;
+            res = stat(args->filename, &buf);
+            if(res < 0) {
+                args->result = ESP_FAIL;
+                goto done;
+            }
         }
     }
     args->result = ESP_OK;
 
 close:
-    fclose(f);
+    if(f) fclose(f);
 
 done:
     xSemaphoreGive(args->done);
@@ -683,7 +701,7 @@ done:
 }
 
 
-static void test_littlefs_concurrent(const char* filename_prefix)
+static void test_littlefs_concurrent_rw(const char* filename_prefix)
 {
 #define TASK_SIZE 4096
     char names[4][64];
@@ -692,9 +710,11 @@ static void test_littlefs_concurrent(const char* filename_prefix)
         unlink(names[i]);  // Make sure these files don't exist
     }
 
+    /************************************************
+     * TESTING CONCURRENT WRITES TO DIFFERENT FILES *
+     ************************************************/
     read_write_test_arg_t args1 = READ_WRITE_TEST_ARG_INIT(names[0], 1);
     read_write_test_arg_t args2 = READ_WRITE_TEST_ARG_INIT(names[1], 2);
-
     printf("writing f1 and f2\n");
     const int cpuid_0 = 0;
     const int cpuid_1 = portNUM_PROCESSORS - 1;
@@ -708,17 +728,24 @@ static void test_littlefs_concurrent(const char* filename_prefix)
     printf("f2 done\n");
     TEST_ASSERT_EQUAL(ESP_OK, args2.result);
 
-    args1.write = false;
-    args2.write = false;
+    args1.action = CONCURRENT_TASK_ACTION_READ;
+    args2.action = CONCURRENT_TASK_ACTION_READ;
     read_write_test_arg_t args3 = READ_WRITE_TEST_ARG_INIT(names[2], 3);
     read_write_test_arg_t args4 = READ_WRITE_TEST_ARG_INIT(names[3], 4);
 
-    printf("reading f1 and f2, writing f3 and f4\n");
+    read_write_test_arg_t args5 = READ_WRITE_TEST_ARG_INIT(names[0], 3);
+    args5.action = CONCURRENT_TASK_ACTION_STAT;
+
+    printf("reading f1 and f2, writing f3 and f4, stating f1 concurrently from 2 cores\n");
 
     xTaskCreatePinnedToCore(&read_write_task, "rw3", TASK_SIZE, &args3, 3, NULL, cpuid_1);
     xTaskCreatePinnedToCore(&read_write_task, "rw4", TASK_SIZE, &args4, 3, NULL, cpuid_0);
     xTaskCreatePinnedToCore(&read_write_task, "rw1", TASK_SIZE, &args1, 3, NULL, cpuid_0);
     xTaskCreatePinnedToCore(&read_write_task, "rw2", TASK_SIZE, &args2, 3, NULL, cpuid_1);
+
+    xTaskCreatePinnedToCore(&read_write_task, "stat1", TASK_SIZE, &args5, 3, NULL, cpuid_0);
+    xTaskCreatePinnedToCore(&read_write_task, "stat2", TASK_SIZE, &args5, 3, NULL, cpuid_1);
+
 
     xSemaphoreTake(args1.done, portMAX_DELAY);
     printf("f1 done\n");
@@ -739,6 +766,7 @@ static void test_littlefs_concurrent(const char* filename_prefix)
     vSemaphoreDelete(args4.done);
 #undef TASK_SIZE
 }
+
 
 static void test_setup() {
     const esp_vfs_littlefs_conf_t conf = {
