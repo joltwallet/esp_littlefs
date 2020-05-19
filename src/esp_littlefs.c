@@ -133,6 +133,39 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, si
     return ESP_OK;
 }
 
+esp_err_t esp_littlefs_print_info(const char* partition_label) {
+    int index;
+    esp_err_t err;
+    esp_littlefs_t *efs = NULL;
+
+    err = esp_littlefs_by_label(partition_label, &index);
+    if(err != ESP_OK) return false;
+    efs = _efs[index];
+
+    size_t total_bytes = efs->cfg.block_size * efs->cfg.block_count;
+    size_t used_bytes = efs->cfg.block_size * lfs_fs_size(efs->fs);
+    size_t free_bytes = total_bytes - used_bytes;
+
+    uint32_t div = 1024;
+    char *unit = "K";
+    if (total_bytes / 1024 >= 1024) {
+        div = 1048576;  // 1024*1024
+        unit = "M";
+    }
+
+    ESP_LOGI(TAG, "Filesystem      Size       Used   Available  Use%%  Mounted on");
+    ESP_LOGI(TAG, "%-16s%3d%s  %9d   %9d  %3d%%  %-s",
+             efs->partition->label,
+             efs->partition->size / div,
+             unit,
+             used_bytes,
+             free_bytes,
+             used_bytes*100 / total_bytes,
+             efs->base_path);
+
+    return ESP_OK;
+}
+
 esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 {
     assert(conf->base_path);
