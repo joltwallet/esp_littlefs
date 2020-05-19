@@ -420,7 +420,7 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
         }
     }
 
-    ESP_LOGD(TAG, "Existing filesystem \%s\" not found", label);
+    ESP_LOGD(TAG, "Existing filesystem \"%s\" not found", label);
     return ESP_ERR_NOT_FOUND;
 }
 
