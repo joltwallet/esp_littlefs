@@ -23,6 +23,12 @@ same; just replace `spiffs` with `littlefs` in all function calls.
 
 Also see the comments in `include/esp_littlefs.h`
 
+Slight differences between this configuration and SPIFFS's configuration is in the `esp_vfs_littlefs_conf_t`:
+
+1. `max_files` field doesn't exist since we removed the file limit, thanks to @X-Ryl669
+
+2. `partition_label` is not allowed to be `NULL`. You must specify the partition name from your partition table. This is because there isn't a define `littlefs` partition subtype in `esp-idf`. The subtype doesn't matter.
+
 # Performance
 
 Here are some naive benchmarks to give a vague indicator on performance.
