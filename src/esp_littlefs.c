@@ -513,14 +513,6 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         goto exit;
     }
 
-    if (partition->encrypted) {
-        // TODO: allow encryption; should probably be fine,
-        // just not allowing until tested.
-        ESP_LOGE(TAG, "littlefs can not run on encrypted partition");
-        err = ESP_ERR_INVALID_STATE;
-        goto exit;
-    }
-
     /* Allocate Context */
     efs = calloc(1, sizeof(esp_littlefs_t));
     if (efs == NULL) {

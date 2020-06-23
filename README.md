@@ -88,6 +88,21 @@ To flash the unit-tester app and the unit-tests, run
 make tests
 ```
 
+To test on an encrypted partition, add the `encrypted` flag to the `flash_test` partition
+in `partition_table_unit_test_app.csv`. I.e.
+
+```
+flash_test,  data, spiffs,    ,        512K, encrypted
+```
+
+Also make sure that `CONFIG_SECURE_FLASH_ENC_ENABLED=y` in `menuconfig`.
+
+The unit tester can then be flashed via the command:
+
+```
+make TEST_COMPONENTS='src' encrypted-flash monitor
+```
+
 # Acknowledgement
 
 This code base was heavily modeled after the SPIFFS esp-idf component.
