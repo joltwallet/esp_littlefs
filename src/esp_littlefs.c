@@ -439,13 +439,13 @@ static esp_err_t esp_littlefs_erase_partition(const char *partition_label) {
  */
 static int esp_littlefs_flags_conv(int m) {
     int lfs_flags = 0;
-    if (m == O_APPEND) lfs_flags |= LFS_O_APPEND;
-    if (m == O_RDONLY) lfs_flags |= LFS_O_RDONLY;
-    if (m & O_WRONLY)  lfs_flags |= LFS_O_WRONLY;
-    if (m & O_RDWR)    lfs_flags |= LFS_O_RDWR;
-    if (m & O_EXCL)    lfs_flags |= LFS_O_EXCL;
-    if (m & O_CREAT)   lfs_flags |= LFS_O_CREAT;
-    if (m & O_TRUNC)   lfs_flags |= LFS_O_TRUNC;
+    if (m == O_APPEND) {ESP_LOGV(TAG, "O_APPEND"); lfs_flags |= LFS_O_APPEND;}
+    if (m == O_RDONLY) {ESP_LOGV(TAG, "O_RDONLY"); lfs_flags |= LFS_O_RDONLY;}
+    if (m & O_WRONLY)  {ESP_LOGV(TAG, "O_WRONLY"); lfs_flags |= LFS_O_WRONLY;}
+    if (m & O_RDWR)    {ESP_LOGV(TAG, "O_RDWR");   lfs_flags |= LFS_O_RDWR;}
+    if (m & O_EXCL)    {ESP_LOGV(TAG, "O_EXCL");   lfs_flags |= LFS_O_EXCL;}
+    if (m & O_CREAT)   {ESP_LOGV(TAG, "O_CREAT");  lfs_flags |= LFS_O_CREAT;}
+    if (m & O_TRUNC)   {ESP_LOGV(TAG, "O_TRUNC");  lfs_flags |= LFS_O_TRUNC;}
     return lfs_flags;
 }
 
