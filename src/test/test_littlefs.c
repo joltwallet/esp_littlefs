@@ -143,6 +143,30 @@ TEST_CASE("r+ mode read and write file", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("w+ mode read and write file", "[littlefs]")
+{
+    const char fn[] = littlefs_base_path "/hello.txt";
+    char buf[100] = { 0 };
+
+    test_setup();
+
+    test_littlefs_create_file_with_text(fn, "foo");
+
+    /* this should overwrite the file and be readable */
+    {
+        FILE* f = fopen(fn, "w+");
+        TEST_ASSERT_NOT_NULL(f);
+        TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
+        TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_SET));
+        TEST_ASSERT_EQUAL(3, fread(buf, 1, sizeof(buf), f));
+        TEST_ASSERT_EQUAL_STRING("bar", buf);
+        TEST_ASSERT_EQUAL(0, fclose(f));
+    }
+
+    test_teardown();
+}
+
+
 TEST_CASE("can open maximum number of files", "[littlefs]")
 {
     size_t max_files = 61;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
