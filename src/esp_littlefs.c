@@ -880,7 +880,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #endif
 
 #if CONFIG_LITTLEFS_USE_MTIME
-    if (!(lfs_flags & LFS_O_RDONLY)) {
+    if (lfs_flags != LFS_O_RDONLY) {
         /* If this is being opened as not read-only */
         vfs_littlefs_update_mtime(efs, path);
     }
