@@ -37,7 +37,7 @@ menu "LittleFS"
         int "Minimum size of a block write."
         default 128
         help
-            Minimum size of a block program. All program operations will be a
+            Minimum size of a block program. All write operations will be a
             multiple of this value.
 
     config LITTLEFS_LOOKAHEAD_SIZE
@@ -48,18 +48,24 @@ menu "LittleFS"
 
     config LITTLEFS_CACHE_SIZE
         int "Cache Size"
-        default 128
+        default 512
         help
-            MUST be a multiple of Read AND Write size. MUST be a factor of 4096.
+            Size of block caches. Each cache buffers a portion of a block in RAM.
+            The littlefs needs a read cache, a program cache, and one additional
+            cache per file. Larger caches can improve performance by storing more
+            data and reducing the number of disk accesses. Must be a multiple of
+            the read and program sizes, and a factor of the block size (4096).
 
     config LITTLEFS_BLOCK_CYCLES
         int "LittleFS wear-leveling block cycles"
         default 512
         range -1 1024
         help
-            Suggested values are in the range 100-1000, with large values having 
-            better performance at the cost of less consistent wear distribution. 
-            -1 disables wear-leveling.
+            Number of erase cycles before littlefs evicts metadata logs and moves 
+            the metadata to another block. Suggested values are in the
+            range 100-1000, with large values having better performance at the cost
+            of less consistent wear distribution.
+            Set to -1 to disable block-level wear-leveling.
 
     config LITTLEFS_USE_MTIME
         bool "Save file modification time"
