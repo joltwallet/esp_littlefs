@@ -21,6 +21,8 @@ wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
 static void setup_spiffs(){
     ESP_LOGI(TAG, "Initializing SPIFFS");
 
+    esp_spiffs_format("spiffs_store");
+
     esp_vfs_spiffs_conf_t conf = {
       .base_path = "/spiffs",
       .partition_label = "spiffs_store",
@@ -64,6 +66,7 @@ static void setup_littlefs() {
         .format_if_mount_failed = true
     };
     TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+    esp_littlefs_format("flash_test");
 }
 
 static void test_setup() {
@@ -120,7 +123,7 @@ static void fill_partitions()
         esp_partition_write(part, i, dummy_data, sizeof(dummy_data));
 }
 
-static size_t get_file_size(const char *fname) {
+static int get_file_size(const char *fname) {
     struct stat sb;
 
     if( 0 != stat(fname, &sb) ) {
@@ -135,53 +138,89 @@ static size_t get_file_size(const char *fname) {
  * @param[in] mount_pt
  * @param[in] iter Number of files to write
  */
-static void write_test_1(const char *mount_pt, uint32_t iter) {
+static void read_write_test_1(const char *mount_pt, uint32_t iter) {
     char fmt_fn[64] = { 0 };
     char fname[128] = { 0 };
     uint64_t t_write = 0;
+    uint64_t t_read = 0;
     uint64_t t_delete = 0;
+
+    int n_write = 0;
+    int n_read = 0;
+    int n_delete = 0;
 
     strcat(fmt_fn, mount_pt);
     if(fmt_fn[strlen(fmt_fn)-1] != '/') strcat(fmt_fn, "/");
     strcat(fmt_fn, "%d.txt");
 
-    printf("\n");
-
+    /* WRITE */
     for(uint8_t i=0; i < iter; i++){
         snprintf(fname, sizeof(fname), fmt_fn, i);
         uint64_t t_start = esp_timer_get_time();
         FILE* f = fopen(fname, "w");
         if (f == NULL) {
-            ESP_LOGE(TAG, "Failed to open file for writing");
-            return;
+            ESP_LOGE(TAG, "Failed to open file %d for writing", i);
+            continue;
         }
         for(uint32_t j=0; j < 2000; j++) {
             fprintf(f, "All work and no play makes Jack a dull boy.\n");
         }
         fclose(f);
         uint64_t t_end = esp_timer_get_time();
-        size_t fsize = get_file_size(fname);
+        int fsize = get_file_size(fname);
         printf("%d bytes written in %lld us\n", fsize, (t_end - t_start));
         t_write += (t_end - t_start);
+        n_write += fsize;
     }
 
     printf("------------\n");
 
+    /* READ */
     for(uint8_t i=0; i < iter; i++){
+        int fsize = 0;
+        snprintf(fname, sizeof(fname), fmt_fn, i);
+        uint64_t t_start = esp_timer_get_time();
+        FILE* f = fopen(fname, "r");
+        if (f == NULL) {
+            ESP_LOGE(TAG, "Failed to open file %d for reading", i);
+            continue;
+        }
+
+        while(fgetc(f) != EOF) fsize ++;
+
+        fclose(f);
+        uint64_t t_end = esp_timer_get_time();
+        printf("%d bytes read in %lld us\n", fsize, (t_end - t_start));
+        t_read += (t_end - t_start);
+        n_read += fsize;
+    }
+
+    printf("------------\n");
+
+    /* DELETE */
+    for(uint8_t i=0; i < iter; i++){
+        snprintf(fname, sizeof(fname), fmt_fn, i);
+
+        int fsize = get_file_size(fname);
+        if (fsize < 0) {
+            continue;
+        }
+
         uint64_t t_start = esp_timer_get_time();
         snprintf(fname, sizeof(fname), fmt_fn, i);
         unlink(fname);
         uint64_t t_end = esp_timer_get_time();
         printf("deleted file %d in %lld us\n", i, (t_end - t_start));
         t_delete += (t_end - t_start);
+        n_delete += fsize;
     }
 
     printf("------------\n");
 
-    printf("Total Write: %lld us\n", t_write);
-    printf("Total Delete: %lld us\n", t_delete);
+    printf("Total (%d) Write: %lld us\n", n_write, t_write);
+    printf("Total (%d) Read: %lld us\n", n_read, t_read);
+    printf("Total (%d) Delete: %lld us\n", n_delete, t_delete);
     printf("\n");
-
 }
 
 
@@ -208,13 +247,20 @@ TEST_CASE("Format", TAG){
 
 }
 
-TEST_CASE("Write 5 files, then delete 5 files", TAG){
+TEST_CASE("Write 5 files, read 5 files, then delete 5 files", TAG){
     test_setup();
+
     printf("FAT:\n");
-    write_test_1("/fat", 5);
+    read_write_test_1("/fat", 5);
+    printf("\n");
+
     printf("SPIFFS:\n");
-    write_test_1("/spiffs", 5);
+    read_write_test_1("/spiffs", 5);
+    printf("\n");
+
     printf("LittleFS:\n");
-    write_test_1("/littlefs", 5);
+    read_write_test_1("/littlefs", 5);
+    printf("\n");
+
     test_teardown();
 }

@@ -44,9 +44,13 @@ LittleFS:  2,067,845 us
 Writing 5 88KB files:
 
 ```
-FAT:       14,711,396 us
-SPIFFS:   154,238,375 us
-LittleFS:  10,344,878 us
+FAT:         13,601,171 us
+SPIFFS*:    118,883,197 us
+LittleFS**:   6,582,045 us
+LittleFS***:  5,734,811 us
+*Only wrote 374,784 bytes instead of the benchmark 440,000, so this value is extrapolated
+**CONFIG_LITTLEFS_CACHE_SIZE=128
+***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
 In the above test, SPIFFS drastically slows down as the filesystem fills up. Below
@@ -57,19 +61,35 @@ on the last file write.
 ```
 SPIFFS:
 
-88000 bytes written in 6945139 us
-88000 bytes written in 6945135 us
-88000 bytes written in 11090827 us
-88000 bytes written in 27832679 us
-22784 bytes written in 101424595 us
+88000 bytes written in 1325371 us
+88000 bytes written in 1327848 us
+88000 bytes written in 5292095 us
+88000 bytes written in 19191680 us
+22784 bytes written in 74082963 us
+```
+
+Reading 5 88KB files:
+
+```
+FAT:          3,111,817 us
+SPIFFS*:      3,392,886 us
+LittleFS**:   3,425,796 us
+LittleFS***:  3,210,140 us
+*Only read 374,784 bytes instead of the benchmark 440,000, so this value is extrapolated
+**CONFIG_LITTLEFS_CACHE_SIZE=128
+***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
 Deleting 5 88KB files:
 
 ```
-FAT:      1,216,137 us
-SPIFFS:   3,712,190 us
-LittleFS:    32,827 us
+FAT:         934,769 us
+SPIFFS*:      822,730 us
+LittleFS**:   31,502 us
+LittleFS***:  20,063 us
+*The 5th file was smaller, did not extrapolate value.
+**CONFIG_LITTLEFS_CACHE_SIZE=128
+***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
 
