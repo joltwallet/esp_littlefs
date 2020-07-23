@@ -122,6 +122,9 @@ The unit tester can then be flashed via the command:
 ```
 make TEST_COMPONENTS='src' encrypted-flash monitor
 ```
+# Breaking Changes
+
+* July 22, 2020 - Changed attribute type for file timestamp from `0` to `0x74` ('t' ascii value).
 
 # Acknowledgement
 
