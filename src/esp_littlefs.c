@@ -47,6 +47,8 @@ typedef struct {
 static int     vfs_littlefs_open(void* ctx, const char * path, int flags, int mode);
 static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t size);
 static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size);
+static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t size, off_t offset);
+static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off_t offset);
 static int     vfs_littlefs_close(void* ctx, int fd);
 static off_t   vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode);
 static int     vfs_littlefs_stat(void* ctx, const char * path, struct stat * st);
@@ -139,8 +141,10 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
     const esp_vfs_t vfs = {
         .flags       = ESP_VFS_FLAG_CONTEXT_PTR,
         .write_p     = &vfs_littlefs_write,
+        .pwrite_p    = &vfs_littlefs_pwrite,
         .lseek_p     = &vfs_littlefs_lseek,
         .read_p      = &vfs_littlefs_read,
+        .pread_p     = &vfs_littlefs_pread,
         .open_p      = &vfs_littlefs_open,
         .close_p     = &vfs_littlefs_close,
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -947,6 +951,120 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
                 fd, esp_littlefs_errno(res), res);
 #endif
         return res;
+    }
+
+    return res;
+}
+
+static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t size, off_t offset)
+{
+    esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
+    ssize_t res, save_res;
+    vfs_littlefs_file_t *file = NULL;
+
+    sem_take(efs);
+    if ((uint32_t)fd > efs->cache_size)
+    {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
+
+    off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
+    if (old_offset < (off_t)0)
+    {
+        res = old_offset;
+        goto exit;
+    }
+
+    /* Set to wanted position.  */
+    res = lfs_file_seek(efs->fs, &file->file, offset, SEEK_SET);
+    if (res < (off_t)0)
+        goto exit;
+
+    /* Write out the data.  */
+    res = lfs_file_write(efs->fs, &file->file, src, size);
+
+    /* Now we have to restore the position.  If this fails we have to
+     return this as an error. But if the writing also failed we
+     return writing error.  */
+    save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
+    if (res >= (ssize_t)0 && save_res < (off_t)0)
+    {
+            res = save_res;
+    }
+    sem_give(efs);
+
+exit:
+    if (res < 0)
+    {
+        errno = -res;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to write FD %d; path \"%s\". Error %s (%d)",
+                fd, file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGV(TAG, "Failed to write FD %d. Error %s (%d)",
+                fd, esp_littlefs_errno(res), res);
+#endif
+        return -1;
+    }
+
+    return res;
+}
+
+static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off_t offset)
+{
+    esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
+    ssize_t res, save_res;
+    vfs_littlefs_file_t *file = NULL;
+
+    sem_take(efs);
+    if ((uint32_t)fd > efs->cache_size)
+    {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        return LFS_ERR_BADF;
+    }
+    file = efs->cache[fd];
+
+    off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
+    if (old_offset < (off_t)0)
+    {
+        res = old_offset;
+        goto exit;
+    }
+
+    /* Set to wanted position.  */
+    res = lfs_file_seek(efs->fs, &file->file, offset, SEEK_SET);
+    if (res < (off_t)0)
+        goto exit;
+
+    /* Read the data.  */
+    res = lfs_file_read(efs->fs, &file->file, dst, size);
+
+    /* Now we have to restore the position.  If this fails we have to
+     return this as an error. But if the reading also failed we
+     return reading error.  */
+    save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
+    if (res >= (ssize_t)0 && save_res < (off_t)0)
+    {
+            res = save_res;
+    }
+    sem_give(efs);
+
+exit:
+    if (res < 0)
+    {
+        errno = -res;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to read file \"%s\". Error %s (%d)",
+                 file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGV(TAG, "Failed to read FD %d. Error %s (%d)",
+                 fd, esp_littlefs_errno(res), res);
+#endif
+        return -1;
     }
 
     return res;
