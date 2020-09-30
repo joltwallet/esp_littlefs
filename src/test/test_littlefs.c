@@ -3,6 +3,7 @@
 #include "esp_littlefs.h"
 
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -27,6 +28,8 @@ static const char littlefs_test_partition_label[] = "flash_test";
 static const char littlefs_test_hello_str[] = "Hello, World!\n";
 #define littlefs_base_path "/littlefs"
 
+static void test_littlefs_write_file_with_offset(const char *filename);
+static void test_littlefs_read_file_with_offset(const char *filename);
 static void test_littlefs_create_file_with_text(const char* name, const char* text);
 static void test_littlefs_overwrite_append(const char* filename);
 static void test_littlefs_read_file(const char* filename);
@@ -103,6 +106,20 @@ TEST_CASE("can read file", "[littlefs]")
     test_setup();
     test_littlefs_create_file_with_text(littlefs_base_path "/hello.txt", littlefs_test_hello_str);
     test_littlefs_read_file(littlefs_base_path "/hello.txt");
+    test_teardown();
+}
+
+TEST_CASE("can write to file with offset (pwrite)", "[littlefs]")
+{
+    test_setup();
+    test_littlefs_write_file_with_offset(littlefs_base_path "/hello.txt");
+    test_teardown();
+}
+
+TEST_CASE("can read from file with offset (pread)", "[littlefs]")
+{
+    test_setup();
+    test_littlefs_read_file_with_offset(littlefs_base_path "/hello.txt");
     test_teardown();
 }
 
@@ -547,6 +564,56 @@ TEST_CASE("mnonce support", "[littlefs]")
 #endif
 
 #endif
+
+static void test_littlefs_write_file_with_offset(const char *filename)
+{
+    const char *source = "Replace this character: [k]";
+    off_t offset = strstr(source, "k") - source;
+    size_t len = strlen(source);
+    const char new_char = 'y';
+
+    // Create file with string at source string
+    test_littlefs_create_file_with_text(filename, source);
+
+    // Replace k with y at the file
+    int fd = open(filename, O_RDWR);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+    int written = pwrite(fd, &new_char, 1, offset);
+    TEST_ASSERT_EQUAL(1, written);
+    TEST_ASSERT_EQUAL(0, close(fd));
+    
+    char buf[len];
+
+    // Compare if both are equal
+    FILE *f = fopen(filename, "r");
+    TEST_ASSERT_NOT_NULL(f);
+    int rd = fread(buf, len, 1, f);
+    TEST_ASSERT_EQUAL(1, rd);
+    TEST_ASSERT_EQUAL(buf[offset], new_char);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+}
+
+static void test_littlefs_read_file_with_offset(const char *filename)
+{
+    const char *source = "This text will be partially read";
+    off_t offset = strstr(source, "p") - source;
+    size_t len = strlen(source);
+    char buf[len - offset + 1];
+    buf[len-offset] = '\0'; // EOS
+
+    // Create file with string at source string
+    test_littlefs_create_file_with_text(filename, source);
+
+    // Read file content beginning at `partially` word
+    int fd = open(filename, O_RDONLY);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+    int rd = pread(fd, buf, len - offset, offset);
+    TEST_ASSERT_EQUAL(len - offset, rd);
+    // Compare if string read from file and source string related slice are equal
+    int res = strcmp(buf, &source[offset]);
+    TEST_ASSERT_EQUAL(0, res);
+    TEST_ASSERT_EQUAL(0, close(fd));
+}
 
 static void test_littlefs_create_file_with_text(const char* name, const char* text)
 {
