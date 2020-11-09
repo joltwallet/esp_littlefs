@@ -910,22 +910,31 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
 {
     test_setup();
 
-    uint8_t buf1[1] = {'a'};
-	uint8_t buf2[1] = {};
+    const char* filename = littlefs_base_path "/multi_fd_file.bin";
 
-	int fd1 = open(littlefs_base_path "/file.bin", O_CREAT | O_RDWR);
-	assert(fd1 >= 0);
+    /* Run this test several times, there seems to be some non-determinism */
+    for(int i=0; i < 100; i++) {
+        uint8_t buf1[1] = {'a'};
+        uint8_t buf2[1] = {};
 
-	int fd2 = open(littlefs_base_path "/file.bin", O_RDWR);
-	assert(fd2 >= 0);
+        int fd1 = open(filename, O_CREAT | O_RDWR);
+        assert(fd1 >= 0);
 
-	lseek(fd1, 0, SEEK_SET);
-	write(fd1, &buf1, sizeof(buf1));
-	fsync(fd1);
+        int fd2 = open(filename, O_RDWR);
+        assert(fd2 >= 0);
 
-	lseek(fd2, 0, SEEK_SET);
-	read(fd2, &buf2, sizeof(buf2));
-	assert(buf1[0] == buf2[0]); 
+        lseek(fd1, 0, SEEK_SET);
+        write(fd1, &buf1, sizeof(buf1));
+        fsync(fd1);
+
+        lseek(fd2, 0, SEEK_SET);
+        read(fd2, &buf2, sizeof(buf2));
+        assert(buf1[0] == buf2[0]); 
+
+        close(fd1);
+        close(fd2);
+        unlink(filename);
+    }
 
     test_teardown();
 }
