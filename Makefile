@@ -17,3 +17,8 @@ tests:
 		TEST_COMPONENTS='src' \
 		flash monitor;
 
+tests-enc:
+	$(MAKE) \
+		TEST_COMPONENTS='src' \
+		encrypted-flash monitor;
+
