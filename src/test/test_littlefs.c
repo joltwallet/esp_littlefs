@@ -472,6 +472,45 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("esp_littlefs_info", "[littlefs]")
+{
+    test_setup();
+
+    char filename[] = littlefs_base_path "/test_esp_littlefs_info.bin";
+    unlink(filename);  /* Delete the file incase it exists */
+    
+    /* Get starting system size */
+    size_t total_og = 0, used_og = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_og, &used_og));
+
+    /* Write 100,000 bytes */
+    FILE* f = fopen(filename, "wb");
+    TEST_ASSERT_NOT_NULL(f);
+    char val = 'c';
+    size_t n_bytes = 100000;
+    for(int i=0; i < n_bytes; i++) {
+        TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
+    }
+    fclose(f);
+
+    /* Re-check system size */
+    size_t total_new = 0, used_new = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_new, &used_new));
+
+    printf("old: %d; new: %d; diff: %d\n", used_og, used_new, used_new-used_og);
+
+    /* total amount of storage shouldn't change */
+    TEST_ASSERT_EQUAL_INT(total_og, total_new);
+
+    /* The actual amount of used storage should be within 2 blocks of expected.*/
+    size_t diff = used_new - used_og;
+    TEST_ASSERT_GREATER_THAN_INT(n_bytes - (2 * 4096), diff);
+    TEST_ASSERT_LESS_THAN_INT(n_bytes + (2 * 4096), diff);
+
+    unlink(filename);
+    test_teardown();
+}
+
 #if CONFIG_LITTLEFS_USE_MTIME
 
 #if CONFIG_LITTLEFS_MTIME_USE_SECONDS
