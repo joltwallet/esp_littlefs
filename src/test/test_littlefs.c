@@ -978,6 +978,22 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
     test_teardown();
 }
 
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+TEST_CASE("SPIFFS COMPAT", "[littlefs]")
+{
+    test_setup();
+
+    const char* filename = littlefs_base_path "/foo/bar/spiffs_compat.bin";
+
+    FILE* f = fopen(filename, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    test_teardown();
+}
+#endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
+
 
 static void test_setup() {
     const esp_vfs_littlefs_conf_t conf = {

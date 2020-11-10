@@ -122,4 +122,16 @@ menu "LittleFS"
 
     endchoice
 
+    config LITTLEFS_SPIFFS_COMPAT
+        bool "Improve SPIFFS drop-in compatability"
+        default "n"
+        help
+            Enabling this feature allows for greater drop-in compatability
+            when replacing SPIFFS. Since SPIFFS doesn't have folders, and 
+            folders are just considered as part of a file name, enabling this
+            will automatically create folders as necessary to create a file
+            instead of throwing an error. Similarly, upon the deletion of the
+            last file in a folder, the folder will be deleted. It is recommended
+            to only enable this flag as a stop-gap solution.
+
 endmenu
