@@ -87,6 +87,7 @@ static int     vfs_littlefs_fstat(void* ctx, int fd, struct stat * st);
 
 #if CONFIG_LITTLEFS_SPIFFS_COMPAT
 static void mkdirs(esp_littlefs_t * efs, const char *dir);
+static void rmdirs(esp_littlefs_t * efs, const char *dir);
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
 static int sem_take(esp_littlefs_t *efs);
@@ -883,6 +884,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
 #if CONFIG_LITTLEFS_SPIFFS_COMPAT
         /* Create all parent directories (if necessary) */
+        ESP_LOGV(TAG, "LITTLEFS_SPIFFS_COMPAT attempting to create all directories for %s", path);
         mkdirs(efs, path);
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
@@ -1312,6 +1314,11 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
         return res;
     }
 
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+    /* Attempt to delete all parent directories that are empty */
+    rmdirs(efs, path);
+#endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
+
     sem_give(efs);
 
     return 0;
@@ -1640,16 +1647,43 @@ static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
  *   will create directories "foo" and "bar"
  */
 static void mkdirs(esp_littlefs_t * efs, const char *dir) {
-        char tmp[ESP_VFS_PATH_MAX + 1];
-        char *p = NULL;
+    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
+    char *p = NULL;
 
-        strlcpy(tmp, dir, sizeof(tmp));
-        for(p = tmp + 1; *p; p++) {
-            if(*p == '/') {
-                *p = 0;
-                vfs_littlefs_mkdir((void*)efs, tmp, S_IRWXU);
-                *p = '/';
-            }
+    strlcpy(tmp, dir, sizeof(tmp));
+    for(p = tmp + 1; *p; p++) {
+        if(*p == '/') {
+            *p = '\0';
+            vfs_littlefs_mkdir((void*)efs, tmp, S_IRWXU);
+            *p = '/';
         }
+    }
 }
+
+/**
+ * @brief Recursively attempt to delete all empty directories for a file.
+ * @param[in] dir Path of directories to delete. The last element of the path
+ * is assumed to be the file and IS NOT deleted.
+ *   e.g.
+ *       "foo/bar/baz"
+ *   will attempt to delete directories (in order):
+ *       1. "foo/bar/baz"
+ *       2. "foo/bar"
+ *       3. "foo"
+ */
+
+static void rmdirs(esp_littlefs_t * efs, const char *dir) {
+    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
+    char *p = NULL;
+
+    strlcpy(tmp, dir, sizeof(tmp));
+    for(p = tmp + strlen(tmp) - 1; p != tmp; p--) {
+        if(*p == '/') {
+            *p = '\0';
+            vfs_littlefs_rmdir((void*)efs, tmp);
+            *p = '/';
+        }
+    }
+}
+
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT

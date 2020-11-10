@@ -365,7 +365,10 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_TRUE(st.st_mode & S_IFREG);
     TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
+#if !CONFIG_LITTLEFS_SPIFFS_COMPAT
+    /* this will have already been deleted */
     TEST_ASSERT_EQUAL(0, rmdir(name_dir2));
+#endif
 
     test_teardown();
 }
@@ -983,12 +986,20 @@ TEST_CASE("SPIFFS COMPAT", "[littlefs]")
 {
     test_setup();
 
-    const char* filename = littlefs_base_path "/foo/bar/spiffs_compat.bin";
+    const char* filename = littlefs_base_path "/spiffs_compat/foo/bar/spiffs_compat.bin";
 
     FILE* f = fopen(filename, "w");
     TEST_ASSERT_NOT_NULL(f);
     TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
     TEST_ASSERT_EQUAL(0, fclose(f));
+
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+
+    /* check to see if all the directories were deleted */
+    struct stat sb;
+    if (stat(littlefs_base_path "/spiffs_compat", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        TEST_FAIL_MESSAGE("Empty directories were not deleted");
+    }
 
     test_teardown();
 }
