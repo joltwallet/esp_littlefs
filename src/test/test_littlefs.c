@@ -952,7 +952,7 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
     const char* filename = littlefs_base_path "/multi_fd_file.bin";
 
     /* Run this test several times, there seems to be some non-determinism */
-    for(int i=0; i < 100; i++) {
+    for(int i=0; i < 10; i++) {
         uint8_t buf1[1] = {'a'};
         uint8_t buf2[1] = {};
 
