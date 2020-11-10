@@ -956,6 +956,8 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
         uint8_t buf1[1] = {'a'};
         uint8_t buf2[1] = {};
 
+        unlink(filename);
+
         int fd1 = open(filename, O_CREAT | O_RDWR);
         assert(fd1 >= 0);
 
@@ -968,7 +970,7 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
 
         lseek(fd2, 0, SEEK_SET);
         read(fd2, &buf2, sizeof(buf2));
-        assert(buf1[0] == buf2[0]); 
+        TEST_ASSERT_EQUAL_STRING_LEN(buf1, buf2, 1);
 
         close(fd1);
         close(fd2);
