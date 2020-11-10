@@ -945,6 +945,39 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
 #undef TASK_SIZE
 }
 
+TEST_CASE("multiple file-descriptors sync", "[littlefs]")
+{
+    test_setup();
+
+    const char* filename = littlefs_base_path "/multi_fd_file.bin";
+
+    /* Run this test several times, there seems to be some non-determinism */
+    for(int i=0; i < 10; i++) {
+        uint8_t buf1[1] = {'a'};
+        uint8_t buf2[1] = {};
+
+        int fd1 = open(filename, O_CREAT | O_RDWR);
+        assert(fd1 >= 0);
+
+        int fd2 = open(filename, O_RDWR);
+        assert(fd2 >= 0);
+
+        lseek(fd1, 0, SEEK_SET);
+        write(fd1, &buf1, sizeof(buf1));
+        fsync(fd1);
+
+        lseek(fd2, 0, SEEK_SET);
+        read(fd2, &buf2, sizeof(buf2));
+        assert(buf1[0] == buf2[0]); 
+
+        close(fd1);
+        close(fd2);
+        unlink(filename);
+    }
+
+    test_teardown();
+}
+
 
 static void test_setup() {
     const esp_vfs_littlefs_conf_t conf = {
