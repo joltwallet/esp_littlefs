@@ -953,8 +953,8 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
 
     /* Run this test several times, there seems to be some non-determinism */
     for(int i=0; i < 10; i++) {
-        uint8_t buf1[1] = {'a'};
-        uint8_t buf2[1] = {};
+        char buf1[]= "bar";
+        char buf2[16];
 
         unlink(filename);
 
@@ -970,7 +970,13 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
 
         lseek(fd2, 0, SEEK_SET);
         read(fd2, &buf2, sizeof(buf2));
-        TEST_ASSERT_EQUAL_STRING_LEN(buf1, buf2, 1);
+        TEST_ASSERT_EQUAL_STRING(buf1, buf2);
+
+        /* fd2 pos should not influence fd1 pos */
+        lseek(fd2, 1, SEEK_SET);
+        TEST_ASSERT_EQUAL(3, lseek(fd1, 0, SEEK_CUR));
+        //read(fd1, &buf2, sizeof(buf2));
+        //TEST_ASSERT_EQUAL_STRING(buf1, buf2);
 
         close(fd1);
         close(fd2);
