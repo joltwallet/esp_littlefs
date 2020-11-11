@@ -45,6 +45,7 @@ typedef struct _vfs_littlefs_file_wrapper_t {
  */
 typedef struct _vfs_littlefs_file_t {
     vfs_littlefs_file_wrapper_t *file;
+    lfs_off_t pos;  /*!< We externally store the file position so we can correctly handle multiple FD on a single file. */
     uint32_t   hash;
     struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH

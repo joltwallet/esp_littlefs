@@ -974,9 +974,7 @@ TEST_CASE("multiple file-descriptors sync", "[littlefs]")
 
         /* fd2 pos should not influence fd1 pos */
         lseek(fd2, 1, SEEK_SET);
-        TEST_ASSERT_EQUAL(3, lseek(fd1, 0, SEEK_CUR));
-        //read(fd1, &buf2, sizeof(buf2));
-        //TEST_ASSERT_EQUAL_STRING(buf1, buf2);
+        TEST_ASSERT_EQUAL(sizeof(buf1), lseek(fd1, 0, SEEK_CUR));
 
         close(fd1);
         close(fd2);

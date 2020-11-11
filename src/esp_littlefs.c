@@ -914,6 +914,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
         file->file->open_count = 1;
     }
 
+    file->pos = 0;
 
     file->hash = compute_hash(path);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -932,6 +933,18 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     return fd;
 }
 
+#define RESTORE_LFS_POS() \
+    res = lfs_file_seek(efs->fs, &file->file->file, file->pos, LFS_SEEK_SET); \
+    if(res < 0) { \
+        errno = -res; \
+        ESP_LOGV(TAG, "Failed to seek pos. Error %s (%d)", esp_littlefs_errno(res), res); \
+        return LFS_ERR_BADF; \
+    }
+
+#define SAVE_LFS_POS() \
+    file->pos = lfs_file_seek(efs->fs, &file->file->file, 0, LFS_SEEK_CUR);
+
+
 static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t size) {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     ssize_t res;
@@ -944,11 +957,12 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
+    RESTORE_LFS_POS();
     res = lfs_file_write(efs->fs, &file->file->file, data, size);
-    sem_give(efs);
 
     if(res < 0){
         errno = -res;
+        sem_give(efs);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGV(TAG, "Failed to write FD %d; path \"%s\". Error %s (%d)",
                 fd, file->path, esp_littlefs_errno(res), res);
@@ -959,6 +973,9 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
         return res;
     }
 
+    SAVE_LFS_POS();
+
+    sem_give(efs);
     return res;
 }
 
@@ -975,6 +992,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
+    RESTORE_LFS_POS();
     res = lfs_file_read(efs->fs, &file->file->file, dst, size);
     sem_give(efs);
 
@@ -989,6 +1007,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
 #endif
         return res;
     }
+    SAVE_LFS_POS();
 
     return res;
 }
@@ -996,7 +1015,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
 static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t size, off_t offset)
 {
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
-    ssize_t res, save_res;
+    ssize_t res;
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
@@ -1008,13 +1027,6 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     }
     file = efs->cache[fd];
 
-    off_t old_offset = lfs_file_seek(efs->fs, &file->file->file, 0, SEEK_CUR);
-    if (old_offset < (off_t)0)
-    {
-        res = old_offset;
-        goto exit;
-    }
-
     /* Set to wanted position.  */
     res = lfs_file_seek(efs->fs, &file->file->file, offset, SEEK_SET);
     if (res < (off_t)0)
@@ -1023,14 +1035,9 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     /* Write out the data.  */
     res = lfs_file_write(efs->fs, &file->file->file, src, size);
 
-    /* Now we have to restore the position.  If this fails we have to
-     return this as an error. But if the writing also failed we
-     return writing error.  */
-    save_res = lfs_file_seek(efs->fs, &file->file->file, old_offset, SEEK_SET);
-    if (res >= (ssize_t)0 && save_res < (off_t)0)
-    {
-            res = save_res;
-    }
+    // We don't have to reset the position since we manage that
+    // externally to lfs
+
     sem_give(efs);
 
 exit:
@@ -1053,7 +1060,7 @@ exit:
 static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off_t offset)
 {
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
-    ssize_t res, save_res;
+    ssize_t res;
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
@@ -1065,13 +1072,6 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     }
     file = efs->cache[fd];
 
-    off_t old_offset = lfs_file_seek(efs->fs, &file->file->file, 0, SEEK_CUR);
-    if (old_offset < (off_t)0)
-    {
-        res = old_offset;
-        goto exit;
-    }
-
     /* Set to wanted position.  */
     res = lfs_file_seek(efs->fs, &file->file->file, offset, SEEK_SET);
     if (res < (off_t)0)
@@ -1080,14 +1080,6 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     /* Read the data.  */
     res = lfs_file_read(efs->fs, &file->file->file, dst, size);
 
-    /* Now we have to restore the position.  If this fails we have to
-     return this as an error. But if the reading also failed we
-     return reading error.  */
-    save_res = lfs_file_seek(efs->fs, &file->file->file, old_offset, SEEK_SET);
-    if (res >= (ssize_t)0 && save_res < (off_t)0)
-    {
-            res = save_res;
-    }
     sem_give(efs);
 
 exit:
@@ -1176,11 +1168,13 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
+
+    RESTORE_LFS_POS(); // Incase LFS_SEEK_CUR
     res = lfs_file_seek(efs->fs, &file->file->file, offset, whence);
-    sem_give(efs);
 
     if(res < 0){
         errno = -res;
+        sem_give(efs);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGV(TAG, "Failed to seek file \"%s\" to offset %08x. Error %s (%d)",
                 file->path, (unsigned int)offset, esp_littlefs_errno(res), res);
@@ -1190,6 +1184,10 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
 #endif
         return res;
     }
+
+    SAVE_LFS_POS();
+
+    sem_give(efs);
 
     return res;
 }
