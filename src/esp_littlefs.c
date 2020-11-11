@@ -950,6 +950,8 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     return fd;
 }
 
+#if 0
+/* This is "more correct", but its slow since it wrecks lfs's caching. */
 #define RESTORE_LFS_POS() \
     res = lfs_file_seek(efs->fs, &file->file->file, file->pos, LFS_SEEK_SET); \
     if(res < 0) { \
@@ -961,6 +963,22 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #define SAVE_LFS_POS() \
     file->pos = lfs_file_seek(efs->fs, &file->file->file, 0, LFS_SEEK_CUR);
 
+#else
+/* This touches "private" stuff, but is much faster */
+#define RESTORE_LFS_POS() \
+    if(file->pos != file->file->file.pos) {; \
+        printf("meow\n"); \
+        res = lfs_file_seek(efs->fs, &file->file->file, file->pos, LFS_SEEK_SET); \
+        if(res < 0) { \
+            errno = -res; \
+            ESP_LOGV(TAG, "Failed to seek pos. Error %s (%d)", esp_littlefs_errno(res), res); \
+            return LFS_ERR_BADF; \
+        } \
+    }
+
+#define SAVE_LFS_POS() \
+    file->pos = file->file->file.pos;
+#endif
 
 static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t size) {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
