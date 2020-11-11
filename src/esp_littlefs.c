@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-#define LOG_LOCAL_LEVEL 5
+//#define LOG_LOCAL_LEVEL 5
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -678,7 +678,6 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
         efs->cache_size = new_size;
     }
 
-
     /* Allocate file descriptor here now */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     *file = calloc(1, sizeof(**file) + path_len);
@@ -756,7 +755,12 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
 
     ESP_LOGV(TAG, "Clearing FD");
     if(NULL != file->file){
-        free(file->file);
+        if(file->file->open_count == 0){
+            /* no other descriptors are using the shared vfs_littlefs_file_wrapper_t,
+             * go ahead and free it. */
+            ESP_LOGV(TAG, "Freeing lfs_file_t.");
+            free(file->file);
+        }
     }
     free(file);
 
@@ -883,7 +887,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     int existing_fd;
     if((existing_fd = esp_littlefs_get_fd_by_name(efs, path)) >= 0) {
         /* littlefs file is already open, increase the reference counter*/
-        assert(file->file != NULL);
+        ESP_LOGV(TAG, "File already open. Reusing lfs_file_t.");
         file->file = efs->cache[existing_fd]->file;
         file->file->open_count++;
     }
@@ -898,8 +902,6 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
         }
         /* Open File */
         res = lfs_file_open(efs->fs, &file->file->file, path, lfs_flags);
-        file->file->open_count = 1;
-
         if( res < 0 ) {
             errno = -res;
             esp_littlefs_free_fd(efs, fd);
@@ -908,6 +910,8 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
                     esp_littlefs_errno(res), res);
             return LFS_ERR_INVAL;
         }
+
+        file->file->open_count = 1;
     }
 
 
@@ -1124,13 +1128,13 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         errno = EBADF;
         return LFS_ERR_BADF;
     }
-    file->file->open_count--;
 
-    if(file->file->open_count == 0) {
+    if(file->file->open_count == 1) {
         /* This is the last FD using this file. Actually close the file */
         res = lfs_file_close(efs->fs, &file->file->file);
         if(res < 0){
             errno = -res;
+            esp_littlefs_free_fd(efs, fd);
             sem_give(efs);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
             ESP_LOGV(TAG, "Failed to close file \"%s\". Error %s (%d)",
@@ -1143,6 +1147,7 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         }
     }
 
+    file->file->open_count--;
     esp_littlefs_free_fd(efs, fd);
 
     sem_give(efs);
