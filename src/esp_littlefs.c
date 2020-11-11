@@ -4,7 +4,7 @@
  * @author Brian Pugh
  */
 
-//#define LOG_LOCAL_LEVEL 4
+#define LOG_LOCAL_LEVEL 5
 
 #include "esp_log.h"
 #include "esp_spi_flash.h"
@@ -98,6 +98,9 @@ void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
     while (efs->file) {
         vfs_littlefs_file_t * next = efs->file->next;
+        if(NULL != efs->file->file) {
+            free(efs->file->file);
+        }
         free(efs->file);
         efs->file = next;
     }
@@ -701,8 +704,6 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
     (*file)->path = (char*)(*file) + sizeof(**file);
 #endif
 
-    (*file)->open_count = 1;
- 
     /* Now find a free place in cache */
     for(i=0; i < efs->cache_size; i++) {
         if (efs->cache[i] == NULL) {
@@ -754,6 +755,9 @@ static int esp_littlefs_free_fd(esp_littlefs_t *efs, int fd){
     efs->fd_count--;
 
     ESP_LOGV(TAG, "Clearing FD");
+    if(NULL != file->file){
+        free(file->file);
+    }
     free(file);
 
 #if 0
@@ -809,6 +813,10 @@ static uint32_t compute_hash(const char * path) {
 
 /**
  * @brief finds an open file descriptor by file name.
+ *
+ * To ONLY be used to check if a file has open descriptors, as a single
+ * file may have multiple open descriptors.
+ *
  * @param[in,out] efs file system context
  * @param[in] path File path to check.
  * @returns integer file descriptor. Returns -1 if not found.
@@ -858,27 +866,39 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     /* Get a FD */
     sem_take(efs);
 
-    if((fd = esp_littlefs_get_fd_by_name(efs, path)) >= 0) {
-        /* FD is already open, increase the reference counter*/
-        efs->cache[fd]->open_count++;
+    /* Allocate a new FD */
+    fd = esp_littlefs_allocate_fd(efs, &file
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+    , path_len
+#endif
+    );
+
+    if(fd < 0) {
+        errno = -fd;
+        sem_give(efs);
+        ESP_LOGV(TAG, "Error obtaining FD");
+        return LFS_ERR_INVAL;
+    }
+
+    int existing_fd;
+    if((existing_fd = esp_littlefs_get_fd_by_name(efs, path)) >= 0) {
+        /* littlefs file is already open, increase the reference counter*/
+        assert(file->file != NULL);
+        file->file = efs->cache[existing_fd]->file;
+        file->file->open_count++;
     }
     else {
-        /* Need to allocate a new FD */
-        fd = esp_littlefs_allocate_fd(efs, &file
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-        , path_len
-#endif
-        );
-
-        if(fd < 0) {
-            errno = -fd;
+        /* Need to allocate and initialize vfs_littlefs_file_wrapper_t */
+        if(NULL == (file->file = calloc(1, sizeof(vfs_littlefs_file_wrapper_t)))) {
+            esp_littlefs_free_fd(efs, fd);
             sem_give(efs);
-            ESP_LOGV(TAG, "Error obtaining FD");
+            errno = ENOMEM;
+            ESP_LOGE(TAG, "vfs_littlefs_file_wrapper_t struct could not be malloced");
             return LFS_ERR_INVAL;
         }
-
         /* Open File */
-        res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
+        res = lfs_file_open(efs->fs, &file->file->file, path, lfs_flags);
+        file->file->open_count = 1;
 
         if( res < 0 ) {
             errno = -res;
@@ -888,12 +908,13 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
                     esp_littlefs_errno(res), res);
             return LFS_ERR_INVAL;
         }
-
-        file->hash = compute_hash(path);
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-        memcpy(file->path, path, path_len);
-#endif
     }
+
+
+    file->hash = compute_hash(path);
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+    memcpy(file->path, path, path_len);
+#endif
 
 #if CONFIG_LITTLEFS_USE_MTIME
     if (lfs_flags != LFS_O_RDONLY) {
@@ -919,7 +940,7 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
-    res = lfs_file_write(efs->fs, &file->file, data, size);
+    res = lfs_file_write(efs->fs, &file->file->file, data, size);
     sem_give(efs);
 
     if(res < 0){
@@ -950,7 +971,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
-    res = lfs_file_read(efs->fs, &file->file, dst, size);
+    res = lfs_file_read(efs->fs, &file->file->file, dst, size);
     sem_give(efs);
 
     if(res < 0){
@@ -983,7 +1004,7 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     }
     file = efs->cache[fd];
 
-    off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
+    off_t old_offset = lfs_file_seek(efs->fs, &file->file->file, 0, SEEK_CUR);
     if (old_offset < (off_t)0)
     {
         res = old_offset;
@@ -991,17 +1012,17 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     }
 
     /* Set to wanted position.  */
-    res = lfs_file_seek(efs->fs, &file->file, offset, SEEK_SET);
+    res = lfs_file_seek(efs->fs, &file->file->file, offset, SEEK_SET);
     if (res < (off_t)0)
         goto exit;
 
     /* Write out the data.  */
-    res = lfs_file_write(efs->fs, &file->file, src, size);
+    res = lfs_file_write(efs->fs, &file->file->file, src, size);
 
     /* Now we have to restore the position.  If this fails we have to
      return this as an error. But if the writing also failed we
      return writing error.  */
-    save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
+    save_res = lfs_file_seek(efs->fs, &file->file->file, old_offset, SEEK_SET);
     if (res >= (ssize_t)0 && save_res < (off_t)0)
     {
             res = save_res;
@@ -1040,7 +1061,7 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     }
     file = efs->cache[fd];
 
-    off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
+    off_t old_offset = lfs_file_seek(efs->fs, &file->file->file, 0, SEEK_CUR);
     if (old_offset < (off_t)0)
     {
         res = old_offset;
@@ -1048,17 +1069,17 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     }
 
     /* Set to wanted position.  */
-    res = lfs_file_seek(efs->fs, &file->file, offset, SEEK_SET);
+    res = lfs_file_seek(efs->fs, &file->file->file, offset, SEEK_SET);
     if (res < (off_t)0)
         goto exit;
 
     /* Read the data.  */
-    res = lfs_file_read(efs->fs, &file->file, dst, size);
+    res = lfs_file_read(efs->fs, &file->file->file, dst, size);
 
     /* Now we have to restore the position.  If this fails we have to
      return this as an error. But if the reading also failed we
      return reading error.  */
-    save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
+    save_res = lfs_file_seek(efs->fs, &file->file->file, old_offset, SEEK_SET);
     if (res >= (ssize_t)0 && save_res < (off_t)0)
     {
             res = save_res;
@@ -1096,12 +1117,18 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
-    assert(file->open_count > 0);
-    file->open_count--;
+    if(file->file->open_count == 0) {
+        /* This should never happen */
+        sem_give(efs);
+        ESP_LOGE(TAG, "File open counter out-of-sync. This should never happen.");
+        errno = EBADF;
+        return LFS_ERR_BADF;
+    }
+    file->file->open_count--;
 
-    if(file->open_count == 0) {
-        /* Actually close the file and release the descriptor */
-        res = lfs_file_close(efs->fs, &file->file);
+    if(file->file->open_count == 0) {
+        /* This is the last FD using this file. Actually close the file */
+        res = lfs_file_close(efs->fs, &file->file->file);
         if(res < 0){
             errno = -res;
             sem_give(efs);
@@ -1114,8 +1141,9 @@ static int vfs_littlefs_close(void* ctx, int fd) {
 #endif
             return res;
         }
-        esp_littlefs_free_fd(efs, fd);
     }
+
+    esp_littlefs_free_fd(efs, fd);
 
     sem_give(efs);
     return res;
@@ -1143,7 +1171,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
-    res = lfs_file_seek(efs->fs, &file->file, offset, whence);
+    res = lfs_file_seek(efs->fs, &file->file->file, offset, whence);
     sem_give(efs);
 
     if(res < 0){
@@ -1175,7 +1203,7 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
-    res = lfs_file_sync(efs->fs, &file->file);
+    res = lfs_file_sync(efs->fs, &file->file->file);
     sem_give(efs);
 
     if(res < 0){

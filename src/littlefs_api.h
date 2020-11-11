@@ -15,6 +15,19 @@ extern "C" {
 #endif
 
 /**
+ *  @brief additional metadata for a lfs_file_t.
+ *
+ *  We need this structure so that we can share a single lfs_file_t
+ *  among multiple file descriptors for the same file, since upstream
+ *  littlefs doesn't fully support multiple openings of the same file.
+ *
+ */
+typedef struct _vfs_littlefs_file_wrapper_t {
+    lfs_file_t file;
+    uint8_t open_count;  /*!< Number of times this file has been opened */
+} vfs_littlefs_file_wrapper_t;
+
+/**
  * @brief a file descriptor
  * That's also a singly linked list used for keeping tracks of all opened file descriptor 
  *
@@ -31,10 +44,9 @@ extern "C" {
  *    2. Same as (1), but for renames
  */
 typedef struct _vfs_littlefs_file_t {
-    lfs_file_t file;
+    vfs_littlefs_file_wrapper_t *file;
     uint32_t   hash;
     struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
-    uint8_t open_count;  /*!< Number of times this file has been opened */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     char     * path;
 #endif
