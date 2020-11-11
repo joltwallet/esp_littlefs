@@ -1115,6 +1115,9 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     /* Read the data.  */
     res = lfs_file_read(efs->fs, &file->file->file, dst, size);
 
+    // We don't have to reset the position since we manage that
+    // externally to lfs
+
     sem_give(efs);
 
 exit:
