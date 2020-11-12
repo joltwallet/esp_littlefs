@@ -34,7 +34,6 @@ typedef struct _vfs_littlefs_file_t {
     lfs_file_t file;
     uint32_t   hash;
     struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
-    uint8_t open_count;  /*!< Number of times this file has been opened */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     char     * path;
 #endif
