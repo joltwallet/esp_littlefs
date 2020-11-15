@@ -896,6 +896,22 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
         return LFS_ERR_INVAL;
     }
 
+    /* Sync after opening. If we are overwriting a file, this will free that
+     * file's blocks in storage, prevent OOS errors.
+     * See TEST_CASE:
+     *     "Rewriting file frees space immediately (#7426)"
+     */
+    res = lfs_file_sync(efs->fs, &file->file);
+    if(res < 0){
+        errno = -res;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to sync at opening file \"%s\". Error %s (%d)",
+                file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGV(TAG, "Failed to sync at opening file %d. Error %d", fd, res);
+#endif
+    }
+
     file->hash = compute_hash(path);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     memcpy(file->path, path, path_len);
