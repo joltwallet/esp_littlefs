@@ -972,7 +972,37 @@ TEST_CASE("SPIFFS COMPAT", "[littlefs]")
 }
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
+TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
+{
+    /* modified from:
+     *     https://github.com/esp8266/Arduino/commit/c663c55926f205723c3d56dd7030bacbe7960f8e
+     */
+
+    test_setup();
+
+    size_t total = 0, used = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+
+    // 2 block overhead
+    int kb_to_write = (total - used - (2*4096)) / 1024;
+
+    // Create and overwrite a file >50% of spaceA (48/64K)
+    uint8_t buf[1024];
+    memset(buf, 0xaa, 1024);
+    for (uint8_t x = 0; x < 2; x++) {
+        FILE *f = fopen(littlefs_base_path "/file1.bin", "w");
+        TEST_ASSERT_NOT_NULL(f);
+
+        for (size_t i = 0; i < kb_to_write; i++) {
+            TEST_ASSERT_EQUAL_INT(1024, fwrite(buf, 1, 1024, f));
+        }
+        fclose(f);
+    }
+    test_teardown();
+}
+
 static void test_setup() {
+    esp_littlefs_format(littlefs_test_partition_label);
     const esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
