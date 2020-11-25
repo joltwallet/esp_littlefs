@@ -64,6 +64,14 @@ extern "C" {
     esp_err_t esp_littlefs_vfs_lock(lfs_t *lfs);
     esp_err_t esp_littlefs_vfs_unlock(lfs_t *lfs);
 
+#if CONFIG_LITTLEFS_HUMAN_READABLE
+    /**
+     * @brief converts an enumerated lfs error into a string.
+     * @param lfs_errno The enumerated littlefs error.
+     */
+    const char * esp_littlefs_errno(enum lfs_error lfs_errno);
+#endif
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

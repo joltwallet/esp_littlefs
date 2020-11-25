@@ -76,6 +76,8 @@ typedef struct {
     char *path;         /*!< Requested directory name */
 } esp_littlefs_vfs_dir_t;
 
+static void free_vlfs_fds(esp_littlefs_vlfs_t *vlfs);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

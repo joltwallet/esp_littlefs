@@ -60,8 +60,6 @@ typedef struct {
     enum esp_vfs_littlefs_type_t type;     /**< Type of fs backend. */
     union {
         esp_vfs_littlefs_type_flash_conf_t flash_conf;
-        esp_vfs_littlefs_type_sdcard_conf_t sdcard_conf;
-        esp_vfs_littlefs_type_custom_conf_t custom_conf;
     };
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
     uint8_t dont_mount:1;             /**< Don't attempt to mount or format. Overrides format_if_mount_failed */
