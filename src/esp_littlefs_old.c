@@ -1394,7 +1394,7 @@ static DIR* vfs_littlefs_opendir(void* ctx, const char* name) {
     return (DIR *)dir;
 
 exit:
-    esp_littlefs_dir_free(dir);
+    vlfs_dir_free(dir);
     return NULL;
 }
 
@@ -1418,7 +1418,7 @@ static int vfs_littlefs_closedir(void* ctx, DIR* pdir) {
         return res;
     }
 
-    esp_littlefs_dir_free(dir);
+    vlfs_dir_free(dir);
     return 0;
 }
 

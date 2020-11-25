@@ -6,6 +6,8 @@
 
 #include "esp_log.h"
 
+#define CONFIG_LITTLEFS_SPIFFS_COMPAT 1
+
 static const char *const TAG = ESP_LITTLEFS_VFS_TAG;
 
 // region helpers
@@ -134,6 +136,71 @@ static esp_err_t create_vlfs(const esp_littlefs_vfs_mount_conf_t *conf, esp_litt
     }
 
     return ESP_OK;
+}
+
+// endregion
+
+// region helpers
+
+#if CONFIG_LITTLEFS_HUMAN_READABLE
+/**
+ * @brief converts an enumerated lfs error into a string.
+ * @param lfs_error The littlefs error.
+ */
+const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
+    switch(lfs_errno){
+        case LFS_ERR_OK: return "LFS_ERR_OK";
+        case LFS_ERR_IO: return "LFS_ERR_IO";
+        case LFS_ERR_CORRUPT: return "LFS_ERR_CORRUPT";
+        case LFS_ERR_NOENT: return "LFS_ERR_NOENT";
+        case LFS_ERR_EXIST: return "LFS_ERR_EXIST";
+        case LFS_ERR_NOTDIR: return "LFS_ERR_NOTDIR";
+        case LFS_ERR_ISDIR: return "LFS_ERR_ISDIR";
+        case LFS_ERR_NOTEMPTY: return "LFS_ERR_NOTEMPTY";
+        case LFS_ERR_BADF: return "LFS_ERR_BADF";
+        case LFS_ERR_FBIG: return "LFS_ERR_FBIG";
+        case LFS_ERR_INVAL: return "LFS_ERR_INVAL";
+        case LFS_ERR_NOSPC: return "LFS_ERR_NOSPC";
+        case LFS_ERR_NOMEM: return "LFS_ERR_NOMEM";
+        case LFS_ERR_NOATTR: return "LFS_ERR_NOATTR";
+        case LFS_ERR_NAMETOOLONG: return "LFS_ERR_NAMETOOLONG";
+        default: return "LFS_ERR_UNDEFINED";
+    }
+    return "";
+}
+#else
+#define esp_littlefs_errno(x) ""
+#endif
+
+/**
+ * @brief Compute the 32bit DJB2 hash of the given string.
+ * @param[in]   path the path to hash
+ * @returns the hash for this path
+ */
+static uint32_t compute_hash(const char * path) {
+    uint32_t hash = 5381u;
+    char c;
+
+    while ((c = *path++))
+        hash = ((hash << 5u) + hash) + c; /* hash * 33 + c */
+    return hash;
+}
+
+/**
+ * @brief Convert fcntl flags to littlefs flags
+ * @param m fcntl flags
+ * @return lfs flags
+ */
+static int fcntl_flags_to_lfs_flag(int m) {
+    int lfs_flags = 0;
+    if (m == O_APPEND) {ESP_LOGV(TAG, "O_APPEND"); lfs_flags |= LFS_O_APPEND;}
+    if (m == O_RDONLY) {ESP_LOGV(TAG, "O_RDONLY"); lfs_flags |= LFS_O_RDONLY;}
+    if (m & O_WRONLY)  {ESP_LOGV(TAG, "O_WRONLY"); lfs_flags |= LFS_O_WRONLY;}
+    if (m & O_RDWR)    {ESP_LOGV(TAG, "O_RDWR");   lfs_flags |= LFS_O_RDWR;}
+    if (m & O_EXCL)    {ESP_LOGV(TAG, "O_EXCL");   lfs_flags |= LFS_O_EXCL;}
+    if (m & O_CREAT)   {ESP_LOGV(TAG, "O_CREAT");  lfs_flags |= LFS_O_CREAT;}
+    if (m & O_TRUNC)   {ESP_LOGV(TAG, "O_TRUNC");  lfs_flags |= LFS_O_TRUNC;}
+    return lfs_flags;
 }
 
 // endregion
@@ -304,72 +371,101 @@ static int vlfs_create_fd(esp_littlefs_vlfs_t * vlfs, esp_littlefs_vfs_file_t **
     return i;
 }
 
-// endregion
-
-// region helpers
-
-#if CONFIG_LITTLEFS_HUMAN_READABLE
 /**
- * @brief converts an enumerated lfs error into a string.
- * @param lfs_error The littlefs error.
+ * @brief Finds an open file descriptor by file name.
+ * @param[in,out] vlfs      File system context
+ * @param[in]     path      File path to check
+ * @returns integer file descriptor. Returns -1 if not found.
+ * @warning This must be called with the vlfs lock taken
+ * @warning If CONFIG_LITTLEFS_USE_ONLY_HASH, there is a slim chance an
+ *          erroneous FD may be returned on hash collision.
  */
-const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
-    switch(lfs_errno){
-        case LFS_ERR_OK: return "LFS_ERR_OK";
-        case LFS_ERR_IO: return "LFS_ERR_IO";
-        case LFS_ERR_CORRUPT: return "LFS_ERR_CORRUPT";
-        case LFS_ERR_NOENT: return "LFS_ERR_NOENT";
-        case LFS_ERR_EXIST: return "LFS_ERR_EXIST";
-        case LFS_ERR_NOTDIR: return "LFS_ERR_NOTDIR";
-        case LFS_ERR_ISDIR: return "LFS_ERR_ISDIR";
-        case LFS_ERR_NOTEMPTY: return "LFS_ERR_NOTEMPTY";
-        case LFS_ERR_BADF: return "LFS_ERR_BADF";
-        case LFS_ERR_FBIG: return "LFS_ERR_FBIG";
-        case LFS_ERR_INVAL: return "LFS_ERR_INVAL";
-        case LFS_ERR_NOSPC: return "LFS_ERR_NOSPC";
-        case LFS_ERR_NOMEM: return "LFS_ERR_NOMEM";
-        case LFS_ERR_NOATTR: return "LFS_ERR_NOATTR";
-        case LFS_ERR_NAMETOOLONG: return "LFS_ERR_NAMETOOLONG";
-        default: return "LFS_ERR_UNDEFINED";
+static int vlfs_get_fd_by_name(esp_littlefs_vlfs_t * vlfs, const char *path){
+    uint32_t hash = compute_hash(path);
+
+    for(uint16_t i=0, j=0; i < vlfs->cache_size && j < vlfs->fd_count; i++){
+        if (vlfs->cache[i]) {
+            ++j;
+
+            if (
+                    vlfs->cache[i]->hash == hash  // Faster than strcmp
+                    #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+                    && strcmp(path, vlfs->cache[i]->path) == 0  // May as well check in case of hash collision. Usually short-circuited.
+                    #endif
+                    ) {
+                ESP_LOGV(TAG, "Found \"%s\" at FD %d.", path, i);
+                return i;
+            }
+        }
     }
-    return "";
+    ESP_LOGV(TAG, "Unable to get a find FD for \"%s\"", path);
+    return -1;
 }
-#else
-#define esp_littlefs_errno(x) ""
-#endif
+
+// region spiffs compat
+
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+/**
+ * @brief Recursively make all parent directories for a file.
+ * @param[in] dir Path of directories to make up to. The last element
+ * of the path is assumed to be the file and IS NOT created.
+ *   e.g.
+ *       "foo/bar/baz"
+ *   will create directories "foo" and "bar"
+ */
+static void mkdirs(esp_littlefs_vlfs_t * vlfs, const char *dir) {
+    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
+    char *p = NULL;
+
+    strlcpy(tmp, dir, sizeof(tmp));
+    for(p = tmp + 1; *p; p++) {
+        if(*p == '/') {
+            *p = '\0';
+            vfs_mkdir((void*)vlfs, tmp, S_IRWXU);
+            *p = '/';
+        }
+    }
+}
 
 /**
- * @brief Compute the 32bit DJB2 hash of the given string.
- * @param[in]   path the path to hash
- * @returns the hash for this path
+ * @brief Recursively attempt to delete all empty directories for a file.
+ * @param[in] dir Path of directories to delete. The last element of the path
+ * is assumed to be the file and IS NOT deleted.
+ *   e.g.
+ *       "foo/bar/baz"
+ *   will attempt to delete directories (in order):
+ *       1. "foo/bar/baz"
+ *       2. "foo/bar"
+ *       3. "foo"
  */
-static uint32_t compute_hash(const char * path) {
-    uint32_t hash = 5381u;
-    char c;
 
-    while ((c = *path++))
-        hash = ((hash << 5u) + hash) + c; /* hash * 33 + c */
-    return hash;
-}
+static void rmdirs(esp_littlefs_vlfs_t * vlfs, const char *dir) {
+    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
+    char *p = NULL;
 
-/**
- * @brief Convert fcntl flags to littlefs flags
- * @param m fcntl flags
- * @return lfs flags
- */
-static int fcntl_flags_to_lfs_flag(int m) {
-    int lfs_flags = 0;
-    if (m == O_APPEND) {ESP_LOGV(TAG, "O_APPEND"); lfs_flags |= LFS_O_APPEND;}
-    if (m == O_RDONLY) {ESP_LOGV(TAG, "O_RDONLY"); lfs_flags |= LFS_O_RDONLY;}
-    if (m & O_WRONLY)  {ESP_LOGV(TAG, "O_WRONLY"); lfs_flags |= LFS_O_WRONLY;}
-    if (m & O_RDWR)    {ESP_LOGV(TAG, "O_RDWR");   lfs_flags |= LFS_O_RDWR;}
-    if (m & O_EXCL)    {ESP_LOGV(TAG, "O_EXCL");   lfs_flags |= LFS_O_EXCL;}
-    if (m & O_CREAT)   {ESP_LOGV(TAG, "O_CREAT");  lfs_flags |= LFS_O_CREAT;}
-    if (m & O_TRUNC)   {ESP_LOGV(TAG, "O_TRUNC");  lfs_flags |= LFS_O_TRUNC;}
-    return lfs_flags;
+    strlcpy(tmp, dir, sizeof(tmp));
+    for(p = tmp + strlen(tmp) - 1; p != tmp; p--) {
+        if(*p == '/') {
+            *p = '\0';
+            vfs_rmdir((void*)vlfs, tmp);
+            *p = '/';
+        }
+    }
 }
+#endif //CONFIG_LITTLEFS_SPIFFS_COMPAT
 
 // endregion
+
+// endregion
+
+/**
+ * @brief Free a esp_littlefs_vfs_dir_t struct.
+ */
+static void free_vfs_dir_t(esp_littlefs_vfs_dir_t *dir){
+    if(dir == NULL) return;
+    if(dir->path) free(dir->path);
+    free(dir);
+}
 
 // endregion
 
@@ -450,7 +546,6 @@ static time_t vfs_littlefs_get_mtime(esp_littlefs_vlfs_t * vlfs, const char *pat
     return t;
 }
 #endif //CONFIG_LITTLEFS_USE_MTIME
-
 
 // endregion
 
@@ -925,7 +1020,7 @@ static int vfs_unlink(void* ctx, const char *path) {
         return res;
     }
 
-    if(esp_littlefs_get_fd_by_name(vlfs, path) >= 0) {
+    if(vlfs_get_fd_by_name(vlfs, path) >= 0) {
         sem_give(vlfs);
         ESP_LOGE(TAG, fail_str_1 " Has open FD.", path);
         return -1;
@@ -958,24 +1053,24 @@ static int vfs_unlink(void* ctx, const char *path) {
 }
 
 static int vfs_rename(void* ctx, const char *src, const char *dst) {
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
     int res;
 
-    sem_take(efs);
+    sem_take(vlfs);
 
-    if(esp_littlefs_get_fd_by_name(efs, src) >= 0){
-        sem_give(efs);
+    if(vlfs_get_fd_by_name(vlfs, src) >= 0){
+        sem_give(vlfs);
         ESP_LOGE(TAG, "Cannot rename; src \"%s\" is open.", src);
         return -1;
     }
-    else if(esp_littlefs_get_fd_by_name(efs, dst) >= 0){
-        sem_give(efs);
+    else if(vlfs_get_fd_by_name(vlfs, dst) >= 0){
+        sem_give(vlfs);
         ESP_LOGE(TAG, "Cannot rename; dst \"%s\" is open.", dst);
         return -1;
     }
 
-    res = lfs_rename(efs->fs, src, dst);
-    sem_give(efs);
+    res = lfs_rename(vlfs->conf.lfs, src, dst);
+    sem_give(vlfs);
     if (res < 0) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to rename \"%s\" -> \"%s\". Error %s (%d)",
@@ -987,12 +1082,12 @@ static int vfs_rename(void* ctx, const char *src, const char *dst) {
 }
 
 static DIR* vfs_opendir(void* ctx, const char* name) {
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
     int res;
-    vfs_littlefs_dir_t *dir = NULL;
+    esp_littlefs_vfs_dir_t * dir = NULL;
 
-    dir = calloc(1, sizeof(vfs_littlefs_dir_t));
-    if( dir == NULL ) {
+    dir = calloc(1, sizeof(esp_littlefs_vfs_dir_t));
+    if(dir == NULL) {
         ESP_LOGE(TAG, "dir struct could not be malloced");
         goto exit;
     }
@@ -1003,9 +1098,9 @@ static DIR* vfs_opendir(void* ctx, const char* name) {
         goto exit;
     }
 
-    sem_take(efs);
-    res = lfs_dir_open(efs->fs, &dir->d, dir->path);
-    sem_give(efs);
+    sem_take(vlfs);
+    res = lfs_dir_open(vlfs->conf.lfs, &dir->d, dir->path);
+    sem_give(vlfs);
     if (res < 0) {
         errno = -res;
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1020,19 +1115,19 @@ static DIR* vfs_opendir(void* ctx, const char* name) {
     return (DIR *)dir;
 
     exit:
-    esp_littlefs_dir_free(dir);
+    free_vfs_dir_t(dir);
     return NULL;
 }
 
 static int vfs_closedir(void* ctx, DIR* pdir) {
     assert(pdir);
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
-    vfs_littlefs_dir_t * dir = (vfs_littlefs_dir_t *) pdir;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vfs_dir_t * dir = (esp_littlefs_vfs_dir_t *) pdir;
     int res;
 
-    sem_take(efs);
-    res = lfs_dir_close(efs->fs, &dir->d);
-    sem_give(efs);
+    sem_take(vlfs);
+    res = lfs_dir_close(vlfs->conf.lfs, &dir->d);
+    sem_give(vlfs);
     if (res < 0) {
         errno = -res;
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1044,34 +1139,33 @@ static int vfs_closedir(void* ctx, DIR* pdir) {
         return res;
     }
 
-    esp_littlefs_dir_free(dir);
+    free_vfs_dir_t(dir);
     return 0;
 }
 
 static struct dirent* vfs_readdir(void* ctx, DIR* pdir) {
     assert(pdir);
-    vfs_littlefs_dir_t * dir = (vfs_littlefs_dir_t *) pdir;
+    esp_littlefs_vfs_dir_t * dir = (esp_littlefs_vfs_dir_t *) pdir;
     int res;
-    struct dirent* out_dirent;
+    struct dirent * out_dirent;
 
-    res = vfs_littlefs_readdir_r(ctx, pdir, &dir->e, &out_dirent);
+    res = vfs_readdir_r(ctx, pdir, &dir->e, &out_dirent);
     if (res != 0) return NULL;
     return out_dirent;
 }
 
-static int vfs_readdir_r(void* ctx, DIR* pdir,
-                                  struct dirent* entry, struct dirent** out_dirent) {
+static int vfs_readdir_r(void* ctx, DIR* pdir, struct dirent* entry, struct dirent** out_dirent) {
     assert(pdir);
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
-    vfs_littlefs_dir_t * dir = (vfs_littlefs_dir_t *) pdir;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vfs_dir_t * dir = (esp_littlefs_vfs_dir_t *) pdir;
     int res;
     struct lfs_info info = { 0 };
 
-    sem_take(efs);
+    sem_take(vlfs);
     do{ /* Read until we get a real object name */
-        res = lfs_dir_read(efs->fs, &dir->d, &info);
+        res = lfs_dir_read(vlfs->conf.lfs, &dir->d, &info);
     }while( res>0 && (strcmp(info.name, ".") == 0 || strcmp(info.name, "..") == 0));
-    sem_give(efs);
+    sem_give(vlfs);
     if (res < 0) {
         errno = -res;
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1109,21 +1203,21 @@ static int vfs_readdir_r(void* ctx, DIR* pdir,
 
 static long vfs_telldir(void* ctx, DIR* pdir) {
     assert(pdir);
-    vfs_littlefs_dir_t * dir = (vfs_littlefs_dir_t *) pdir;
+    esp_littlefs_vfs_dir_t * dir = (esp_littlefs_vfs_dir_t *) pdir;
     return dir->offset;
 }
 
 static void vfs_seekdir(void* ctx, DIR* pdir, long offset) {
     assert(pdir);
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
-    vfs_littlefs_dir_t * dir = (vfs_littlefs_dir_t *) pdir;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vfs_dir_t * dir = (esp_littlefs_vfs_dir_t *) pdir;
     int res;
 
     if (offset < dir->offset) {
         /* close and re-open dir to rewind to beginning */
-        sem_take(efs);
-        res = lfs_dir_rewind(efs->fs, &dir->d);
-        sem_give(efs);
+        sem_take(vlfs);
+        res = lfs_dir_rewind(vlfs->conf.lfs, &dir->d);
+        sem_give(vlfs);
         if (res < 0) {
             errno = -res;
             ESP_LOGV(TAG, "Failed to rewind dir \"%s\". Error %s (%d)",
@@ -1135,7 +1229,7 @@ static void vfs_seekdir(void* ctx, DIR* pdir, long offset) {
 
     while(dir->offset < offset){
         struct dirent *out_dirent;
-        res = vfs_littlefs_readdir_r(ctx, pdir, &dir->e, &out_dirent);
+        res = vfs_readdir_r(ctx, pdir, &dir->e, &out_dirent);
         if( res != 0 ){
             ESP_LOGE(TAG, "Error readdir_r");
             return;
@@ -1145,13 +1239,13 @@ static void vfs_seekdir(void* ctx, DIR* pdir, long offset) {
 
 static int vfs_mkdir(void* ctx, const char* name, mode_t mode) {
     /* Note: mode is currently unused */
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
     int res;
     ESP_LOGV(TAG, "mkdir \"%s\"", name);
 
-    sem_take(efs);
-    res = lfs_mkdir(efs->fs, name);
-    sem_give(efs);
+    sem_take(vlfs);
+    res = lfs_mkdir(vlfs->conf.lfs, name);
+    sem_give(vlfs);
     if (res < 0) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to mkdir \"%s\". Error %s (%d)",
@@ -1162,29 +1256,29 @@ static int vfs_mkdir(void* ctx, const char* name, mode_t mode) {
 }
 
 static int vfs_rmdir(void* ctx, const char* name) {
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
+    esp_littlefs_vlfs_t * vlfs = (esp_littlefs_vlfs_t *)ctx;
     struct lfs_info info;
     int res;
 
     /* Error Checking */
-    sem_take(efs);
-    res = lfs_stat(efs->fs, name, &info);
+    sem_take(vlfs);
+    res = lfs_stat(vlfs->conf.lfs, name, &info);
     if (res < 0) {
         errno = -res;
-        sem_give(efs);
+        sem_give(vlfs);
         ESP_LOGV(TAG, "\"%s\" doesn't exist.", name);
         return -1;
     }
 
     if (info.type != LFS_TYPE_DIR) {
-        sem_give(efs);
+        sem_give(vlfs);
         ESP_LOGV(TAG, "\"%s\" is not a directory.", name);
         return -1;
     }
 
     /* Unlink the dir */
-    res = lfs_remove(efs->fs, name);
-    sem_give(efs);
+    res = lfs_remove(vlfs->conf.lfs, name);
+    sem_give(vlfs);
     if ( res < 0) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to unlink path \"%s\". Error %s (%d)",
@@ -1194,131 +1288,6 @@ static int vfs_rmdir(void* ctx, const char* name) {
 
     return 0;
 }
-
-#if CONFIG_LITTLEFS_USE_MTIME
-/**
- * Sets the mtime attr to t.
- */
-static int vfs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t)
-{
-    int res;
-    res = lfs_setattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
-                      &t, sizeof(t));
-    if( res < 0 ) {
-        errno = -res;
-        ESP_LOGV(TAG, "Failed to update mtime (%d)", res);
-    }
-
-    return res;
-}
-
-/**
- * Sets the mtime attr to an appropriate value
- */
-static void vfs_update_mtime(esp_littlefs_t *efs, const char *path)
-{
-    vfs_littlefs_utime(efs, path, NULL);
-}
-
-
-static int vfs_utime(void *ctx, const char *path, const struct utimbuf *times)
-{
-    esp_littlefs_t * efs = (esp_littlefs_vlfs_t *)ctx;
-    time_t t;
-
-    assert(path);
-
-    if (times) {
-        t = times->modtime;
-    } else {
-#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
-        // use current time
-        t = time(NULL);
-#elif CONFIG_LITTLEFS_MTIME_USE_NONCE
-        assert( sizeof(time_t) == 4 );
-        t = vfs_littlefs_get_mtime(efs, path);
-        if( 0 == t ) t = esp_random();
-        else t += 1;
-
-        if( 0 == t ) t = 1;
-#else
-#error "Invalid MTIME configuration"
-#endif
-    }
-
-    int ret = vfs_littlefs_update_mtime_value(efs, path, t);
-    return ret;
-}
-
-static time_t vfs_get_mtime(esp_littlefs_t *efs, const char *path)
-{
-    time_t t = 0;
-    int size;
-    size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
-                       &t, sizeof(t));
-    if( size < 0 ) {
-        errno = -size;
-#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-        ESP_LOGV(TAG, "Failed to get mtime attribute %s (%d)",
-                 esp_littlefs_errno(size), size);
-#else
-        ESP_LOGV(TAG, "Failed to get mtime attribute %d", size);
-#endif
-    }
-    return t;
-}
-#endif //CONFIG_LITTLEFS_USE_MTIME
-
-#if CONFIG_LITTLEFS_SPIFFS_COMPAT
-/**
- * @brief Recursively make all parent directories for a file.
- * @param[in] dir Path of directories to make up to. The last element
- * of the path is assumed to be the file and IS NOT created.
- *   e.g.
- *       "foo/bar/baz"
- *   will create directories "foo" and "bar"
- */
-static void mkdirs(esp_littlefs_t * efs, const char *dir) {
-    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
-    char *p = NULL;
-
-    strlcpy(tmp, dir, sizeof(tmp));
-    for(p = tmp + 1; *p; p++) {
-        if(*p == '/') {
-            *p = '\0';
-            vfs_littlefs_mkdir((void*)efs, tmp, S_IRWXU);
-            *p = '/';
-        }
-    }
-}
-
-/**
- * @brief Recursively attempt to delete all empty directories for a file.
- * @param[in] dir Path of directories to delete. The last element of the path
- * is assumed to be the file and IS NOT deleted.
- *   e.g.
- *       "foo/bar/baz"
- *   will attempt to delete directories (in order):
- *       1. "foo/bar/baz"
- *       2. "foo/bar"
- *       3. "foo"
- */
-
-static void rmdirs(esp_littlefs_t * efs, const char *dir) {
-    char tmp[CONFIG_LITTLEFS_OBJ_NAME_LEN];
-    char *p = NULL;
-
-    strlcpy(tmp, dir, sizeof(tmp));
-    for(p = tmp + strlen(tmp) - 1; p != tmp; p--) {
-        if(*p == '/') {
-            *p = '\0';
-            vfs_littlefs_rmdir((void*)efs, tmp);
-            *p = '/';
-        }
-    }
-}
-
-#endif //CONFIG_LITTLEFS_SPIFFS_COMPAT
 
 // endregion
 
