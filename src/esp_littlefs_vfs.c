@@ -1,3 +1,8 @@
+/**
+ * @brief Maps LittleFS <-> ESP_VFS
+ * Based on esp_littlefs.c written by Brian Pugh.
+ */
+
 #include "esp_littlefs_vfs_priv.h"
 
 #include <fcntl.h>
@@ -5,8 +10,6 @@
 #include <errno.h>
 
 #include "esp_log.h"
-
-#define CONFIG_LITTLEFS_SPIFFS_COMPAT 1
 
 static const char *const TAG = ESP_LITTLEFS_VFS_TAG;
 

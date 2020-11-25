@@ -20,7 +20,6 @@
 #include "esp32/rom/spi_flash.h"
 #include "esp_system.h"
 
-#include "esp_littlefs_old.h"
 #include "littlefs_api.h"
 
 
