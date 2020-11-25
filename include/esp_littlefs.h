@@ -34,12 +34,35 @@ extern "C" {
  */
 #define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
+enum esp_vfs_littlefs_type_t {
+    ESP_VFS_LITTLEFS_TYPE_FLASH,
+    ESP_VFS_LITTLEFS_TYPE_SDCARD,
+    ESP_VFS_LITTLEFS_TYPE_CUSTOM
+};
+
+typedef struct {
+    const char *partition_label;      /**< Label of partition to use. */
+} esp_vfs_littlefs_type_flash_conf_t;
+
+typedef struct {
+
+} esp_vfs_littlefs_type_custom_conf_t;
+
+typedef struct {
+
+} esp_vfs_littlefs_type_sdcard_conf_t;
+
 /**
- *Configuration structure for esp_vfs_littlefs_register.
+ * Configuration structure for esp_vfs_littlefs_register.
  */
 typedef struct {
     const char *base_path;            /**< Mounting point. */
-    const char *partition_label;      /**< Label of partition to use. */
+    enum esp_vfs_littlefs_type_t type;     /**< Type of fs backend. */
+    union {
+        esp_vfs_littlefs_type_flash_conf_t flash_conf;
+        esp_vfs_littlefs_type_sdcard_conf_t sdcard_conf;
+        esp_vfs_littlefs_type_custom_conf_t custom_conf;
+    };
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
     uint8_t dont_mount:1;             /**< Don't attempt to mount or format. Overrides format_if_mount_failed */
 } esp_vfs_littlefs_conf_t;
@@ -49,7 +72,7 @@ typedef struct {
  *
  * @param   conf                      Pointer to esp_vfs_littlefs_conf_t configuration structure
  *
- * @return  
+ * @return
  *          - ESP_OK                  if success
  *          - ESP_ERR_NO_MEM          if objects could not be allocated
  *          - ESP_ERR_INVALID_STATE   if already mounted or partition is encrypted
@@ -63,7 +86,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf);
  *
  * @param partition_label  Label of the partition to unregister.
  *
- * @return  
+ * @return
  *          - ESP_OK if successful
  *          - ESP_ERR_INVALID_STATE already unregistered
  */
@@ -74,7 +97,7 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label);
  *
  * @param partition_label  Label of the partition to check.
  *
- * @return  
+ * @return
  *          - true    if mounted
  *          - false   if not mounted
  */
@@ -84,7 +107,7 @@ bool esp_littlefs_mounted(const char* partition_label);
  * Format the littlefs partition
  *
  * @param partition_label  Label of the partition to format.
- * @return  
+ * @return
  *          - ESP_OK      if successful
  *          - ESP_FAIL    on error
  */
@@ -97,7 +120,7 @@ esp_err_t esp_littlefs_format(const char* partition_label);
  * @param[out] total_bytes          Size of the file system
  * @param[out] used_bytes           Current used bytes in the file system
  *
- * @return  
+ * @return
  *          - ESP_OK                  if success
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */

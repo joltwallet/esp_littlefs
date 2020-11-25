@@ -16,7 +16,7 @@ extern "C" {
 
 /**
  * @brief a file descriptor
- * That's also a singly linked list used for keeping tracks of all opened file descriptor 
+ * That's also a singly linked list used for keeping tracks of all opened file descriptor
  *
  * Shortcomings/potential issues of 32-bit hash (when CONFIG_LITTLEFS_USE_ONLY_HASH) listed here:
  *     * unlink - If a different file is open that generates a hash collision, it will report an
@@ -26,7 +26,7 @@ extern "C" {
  * Potential consequences:
  *    1. A file cannot be deleted while a collision-geneating file is open.
  *       Worst-case, if the other file is always open during the lifecycle
- *       of your app, it's collision file cannot be deleted, which in the 
+ *       of your app, it's collision file cannot be deleted, which in the
  *       worst-case could cause storage-capacity issues.
  *    2. Same as (1), but for renames
  */
@@ -45,6 +45,7 @@ typedef struct _vfs_littlefs_file_t {
 typedef struct {
     lfs_t *fs;                                /*!< Handle to the underlying littlefs */
     SemaphoreHandle_t lock;                   /*!< FS lock */
+    enum esp_vfs_littlefs_type_t x;
     const esp_partition_t* partition;         /*!< The partition on which littlefs is located */
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
 
@@ -70,7 +71,7 @@ int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
 /**
  * @brief Program a region in a block.
  *
- * The block must have previously been erased. 
+ * The block must have previously been erased.
  * Negative error codes are propogated to the user.
  * May return LFS_ERR_CORRUPT if the block should be considered bad.
  *
