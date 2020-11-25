@@ -140,36 +140,6 @@ static esp_err_t create_vlfs(const esp_littlefs_vfs_mount_conf_t *conf, esp_litt
 
 // region vlfs functions
 
-#if CONFIG_LITTLEFS_HUMAN_READABLE
-/**
- * @brief converts an enumerated lfs error into a string.
- * @param lfs_error The littlefs error.
- */
-const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
-    switch(lfs_errno){
-        case LFS_ERR_OK: return "LFS_ERR_OK";
-        case LFS_ERR_IO: return "LFS_ERR_IO";
-        case LFS_ERR_CORRUPT: return "LFS_ERR_CORRUPT";
-        case LFS_ERR_NOENT: return "LFS_ERR_NOENT";
-        case LFS_ERR_EXIST: return "LFS_ERR_EXIST";
-        case LFS_ERR_NOTDIR: return "LFS_ERR_NOTDIR";
-        case LFS_ERR_ISDIR: return "LFS_ERR_ISDIR";
-        case LFS_ERR_NOTEMPTY: return "LFS_ERR_NOTEMPTY";
-        case LFS_ERR_BADF: return "LFS_ERR_BADF";
-        case LFS_ERR_FBIG: return "LFS_ERR_FBIG";
-        case LFS_ERR_INVAL: return "LFS_ERR_INVAL";
-        case LFS_ERR_NOSPC: return "LFS_ERR_NOSPC";
-        case LFS_ERR_NOMEM: return "LFS_ERR_NOMEM";
-        case LFS_ERR_NOATTR: return "LFS_ERR_NOATTR";
-        case LFS_ERR_NAMETOOLONG: return "LFS_ERR_NAMETOOLONG";
-        default: return "LFS_ERR_UNDEFINED";
-    }
-    return "";
-}
-#else
-#define esp_littlefs_errno(x) ""
-#endif
-
 /**
  * @brief Release a file descriptor
  * @param[in,out] vlfs      File system context
@@ -336,6 +306,38 @@ static int vlfs_create_fd(esp_littlefs_vlfs_t * vlfs, esp_littlefs_vfs_file_t **
 
 // endregion
 
+// region helpers
+
+#if CONFIG_LITTLEFS_HUMAN_READABLE
+/**
+ * @brief converts an enumerated lfs error into a string.
+ * @param lfs_error The littlefs error.
+ */
+const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
+    switch(lfs_errno){
+        case LFS_ERR_OK: return "LFS_ERR_OK";
+        case LFS_ERR_IO: return "LFS_ERR_IO";
+        case LFS_ERR_CORRUPT: return "LFS_ERR_CORRUPT";
+        case LFS_ERR_NOENT: return "LFS_ERR_NOENT";
+        case LFS_ERR_EXIST: return "LFS_ERR_EXIST";
+        case LFS_ERR_NOTDIR: return "LFS_ERR_NOTDIR";
+        case LFS_ERR_ISDIR: return "LFS_ERR_ISDIR";
+        case LFS_ERR_NOTEMPTY: return "LFS_ERR_NOTEMPTY";
+        case LFS_ERR_BADF: return "LFS_ERR_BADF";
+        case LFS_ERR_FBIG: return "LFS_ERR_FBIG";
+        case LFS_ERR_INVAL: return "LFS_ERR_INVAL";
+        case LFS_ERR_NOSPC: return "LFS_ERR_NOSPC";
+        case LFS_ERR_NOMEM: return "LFS_ERR_NOMEM";
+        case LFS_ERR_NOATTR: return "LFS_ERR_NOATTR";
+        case LFS_ERR_NAMETOOLONG: return "LFS_ERR_NAMETOOLONG";
+        default: return "LFS_ERR_UNDEFINED";
+    }
+    return "";
+}
+#else
+#define esp_littlefs_errno(x) ""
+#endif
+
 /**
  * @brief Compute the 32bit DJB2 hash of the given string.
  * @param[in]   path the path to hash
@@ -369,7 +371,88 @@ static int fcntl_flags_to_lfs_flag(int m) {
 
 // endregion
 
+// endregion
+
 // region filesystem hooks
+
+// region time
+
+#if CONFIG_LITTLEFS_USE_MTIME
+/**
+ * Sets the mtime attr to t.
+ */
+static int vfs_update_mtime_value(esp_littlefs_vlfs_t * vlfs, const char *path, time_t t)
+{
+    int res;
+    res = lfs_setattr(vlfs->conf.lfs, path, LITTLEFS_ATTR_MTIME,
+                      &t, sizeof(t));
+    if( res < 0 ) {
+        errno = -res;
+        ESP_LOGV(TAG, "Failed to update mtime (%d)", res);
+    }
+
+    return res;
+}
+
+static int vfs_utime(void *ctx, const char *path, const struct utimbuf *times)
+{
+    esp_littlefs_vlfs_t * efs = (esp_littlefs_vlfs_t *)ctx;
+    time_t t;
+
+    assert(path);
+
+    if (times)
+        t = times->modtime;
+    else {
+#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
+        // use current time
+        t = time(NULL);
+#elif CONFIG_LITTLEFS_MTIME_USE_NONCE
+        assert( sizeof(time_t) == 4 );
+        t = vfs_littlefs_get_mtime(vlfs, path);
+        if( 0 == t ) t = esp_random();
+        else t += 1;
+
+        if( 0 == t ) t = 1;
+#else
+#error "Invalid MTIME configuration"
+#endif
+    }
+
+    int ret = vfs_update_mtime_value(efs, path, t);
+    return ret;
+}
+
+/**
+ * Sets the mtime attr to an appropriate value
+ */
+static void vfs_littlefs_update_mtime(esp_littlefs_vlfs_t * vlfs, const char *path)
+{
+    vfs_utime(vlfs, path, NULL);
+}
+
+
+
+static time_t vfs_littlefs_get_mtime(esp_littlefs_vlfs_t * vlfs, const char *path)
+{
+    time_t t = 0;
+    int size = lfs_getattr(vlfs->conf.lfs, path, LITTLEFS_ATTR_MTIME,
+                           &t, sizeof(t));
+    if( size < 0 ) {
+        errno = -size;
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to get mtime attribute %s (%d)",
+                 esp_littlefs_errno(size), size);
+#else
+        ESP_LOGV(TAG, "Failed to get mtime attribute %d", size);
+#endif
+    }
+    return t;
+}
+#endif //CONFIG_LITTLEFS_USE_MTIME
+
+
+// endregion
 
 /**
  * @brief
