@@ -365,7 +365,10 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_TRUE(st.st_mode & S_IFREG);
     TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
+#if !CONFIG_LITTLEFS_SPIFFS_COMPAT
+    /* this will have already been deleted */
     TEST_ASSERT_EQUAL(0, rmdir(name_dir2));
+#endif
 
     test_teardown();
 }
@@ -469,6 +472,45 @@ TEST_CASE("multiple tasks can use same volume", "[littlefs]")
 {
     test_setup();
     test_littlefs_concurrent_rw(littlefs_base_path "/f");
+    test_teardown();
+}
+
+TEST_CASE("esp_littlefs_info", "[littlefs]")
+{
+    test_setup();
+
+    char filename[] = littlefs_base_path "/test_esp_littlefs_info.bin";
+    unlink(filename);  /* Delete the file incase it exists */
+    
+    /* Get starting system size */
+    size_t total_og = 0, used_og = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_og, &used_og));
+
+    /* Write 100,000 bytes */
+    FILE* f = fopen(filename, "wb");
+    TEST_ASSERT_NOT_NULL(f);
+    char val = 'c';
+    size_t n_bytes = 100000;
+    for(int i=0; i < n_bytes; i++) {
+        TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
+    }
+    fclose(f);
+
+    /* Re-check system size */
+    size_t total_new = 0, used_new = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_new, &used_new));
+
+    printf("old: %d; new: %d; diff: %d\n", used_og, used_new, used_new-used_og);
+
+    /* total amount of storage shouldn't change */
+    TEST_ASSERT_EQUAL_INT(total_og, total_new);
+
+    /* The actual amount of used storage should be within 2 blocks of expected.*/
+    size_t diff = used_new - used_og;
+    TEST_ASSERT_GREATER_THAN_INT(n_bytes - (2 * 4096), diff);
+    TEST_ASSERT_LESS_THAN_INT(n_bytes + (2 * 4096), diff);
+
+    unlink(filename);
     test_teardown();
 }
 
@@ -906,8 +948,61 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
 #undef TASK_SIZE
 }
 
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+TEST_CASE("SPIFFS COMPAT", "[littlefs]")
+{
+    test_setup();
+
+    const char* filename = littlefs_base_path "/spiffs_compat/foo/bar/spiffs_compat.bin";
+
+    FILE* f = fopen(filename, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+
+    /* check to see if all the directories were deleted */
+    struct stat sb;
+    if (stat(littlefs_base_path "/spiffs_compat", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        TEST_FAIL_MESSAGE("Empty directories were not deleted");
+    }
+
+    test_teardown();
+}
+#endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
+
+TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
+{
+    /* modified from:
+     *     https://github.com/esp8266/Arduino/commit/c663c55926f205723c3d56dd7030bacbe7960f8e
+     */
+
+    test_setup();
+
+    size_t total = 0, used = 0;
+    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+
+    // 2 block overhead
+    int kb_to_write = (total - used - (2*4096)) / 1024;
+
+    // Create and overwrite a file >50% of spaceA (48/64K)
+    uint8_t buf[1024];
+    memset(buf, 0xaa, 1024);
+    for (uint8_t x = 0; x < 2; x++) {
+        FILE *f = fopen(littlefs_base_path "/file1.bin", "w");
+        TEST_ASSERT_NOT_NULL(f);
+
+        for (size_t i = 0; i < kb_to_write; i++) {
+            TEST_ASSERT_EQUAL_INT(1024, fwrite(buf, 1, 1024, f));
+        }
+        fclose(f);
+    }
+    test_teardown();
+}
 
 static void test_setup() {
+    esp_littlefs_format(littlefs_test_partition_label);
     const esp_vfs_littlefs_conf_t conf = {
         .base_path = littlefs_base_path,
         .partition_label = littlefs_test_partition_label,
