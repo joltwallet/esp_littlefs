@@ -9,7 +9,7 @@
 #include "esp_log.h"
 #include "esp_partition.h"
 #include "littlefs/lfs.h"
-#include "esp_littlefs.h"
+#include "esp_littlefs_old.h"
 #include "littlefs_api.h"
 
 static const char TAG[] = "esp_littlefs_api";
