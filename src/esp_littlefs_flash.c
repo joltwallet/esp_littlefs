@@ -54,8 +54,5 @@ esp_err_t esp_littlefs_flash_format(const char * partition_label) {
 
     return ESP_OK;
 }
-esp_err_t esp_littlefs_flash_info(lfs_t *lfs, size_t *total_bytes, size_t *used_bytes) {
-
-}
 
 // endregion

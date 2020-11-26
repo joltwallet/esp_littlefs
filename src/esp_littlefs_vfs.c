@@ -1378,31 +1378,36 @@ esp_err_t esp_littlefs_vfs_mount(const esp_littlefs_vfs_mount_conf_t *conf) {
 
 esp_err_t esp_littlefs_vfs_unmount(lfs_t *lfs) {
     assert(lfs);
+    esp_err_t ret = ESP_FAIL;
     if (!vlfs_list_lock)
         return ESP_ERR_INVALID_STATE;
-    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
-    if (vlfs == NULL)
-        return ESP_ERR_NOT_FOUND;
-    esp_err_t ret = ESP_FAIL;
     xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
     ret = esp_vfs_unregister(vlfs->conf.mount_point);
     free_vlfs(&vlfs);
 
+    ret:
     xSemaphoreGive(vlfs_list_lock);
     return ret;
 }
 
 const char *esp_littlefs_vfs_mount_point(lfs_t *lfs) {
     assert(lfs);
+    const char * ret = NULL;
     if (!vlfs_list_lock)
-        return NULL;
-    const char *ret = NULL;
+        return ret;
     xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
-
     esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
-    if (vlfs == NULL)
+    if (vlfs == NULL) {
+        ret = NULL;
         goto ret;
+    }
+
     ret = vlfs->conf.mount_point;
 
     ret:
@@ -1412,13 +1417,15 @@ const char *esp_littlefs_vfs_mount_point(lfs_t *lfs) {
 
 esp_err_t esp_littlefs_vfs_lock(lfs_t *lfs) {
     assert(lfs);
+    esp_err_t ret = ESP_FAIL;
     if (!vlfs_list_lock)
         return ESP_ERR_INVALID_STATE;
-    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
-    if (vlfs == NULL)
-        return ESP_ERR_NOT_FOUND;
-    esp_err_t ret = ESP_FAIL;
     xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
     xSemaphoreTake(vlfs->lock, portMAX_DELAY);
 
@@ -1429,13 +1436,15 @@ esp_err_t esp_littlefs_vfs_lock(lfs_t *lfs) {
 
 esp_err_t esp_littlefs_vfs_unlock(lfs_t *lfs) {
     assert(lfs);
+    esp_err_t ret = ESP_FAIL;
     if (!vlfs_list_lock)
         return ESP_ERR_INVALID_STATE;
-    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
-    if (vlfs == NULL)
-        return ESP_ERR_NOT_FOUND;
-    esp_err_t ret = ESP_FAIL;
     xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
     xSemaphoreGive(vlfs->lock);
 

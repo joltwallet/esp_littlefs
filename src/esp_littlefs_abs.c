@@ -2,9 +2,9 @@
 
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-#include "esp_partition.h"
 #include "esp_log.h"
 
 static const char *const TAG = ESP_LITTLEFS_ABS_TAG;
@@ -153,16 +153,84 @@ static esp_err_t create_vlfs(esp_littlefs_vlfs_t **vlfsArg, struct lfs_config * 
 // region public api
 
 esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *)) {
+    assert(lfs);
+    assert(config);
 
+    if (vlfs_list_lock == NULL) {
+        static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+        portENTER_CRITICAL(&mux);
+        if (vlfs_list_lock == NULL) {
+            vlfs_list_lock = xSemaphoreCreateMutex();
+            assert(vlfs_list_lock);
+        }
+        portEXIT_CRITICAL(&mux);
+    }
+    xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+
+    // create the vlfs structure
+    esp_littlefs_vlfs_t *vlfs;
+    esp_err_t err = create_vlfs(&vlfs, config, format_on_error, free_ctx);
+
+    xSemaphoreGive(vlfs_list_lock);
+    return err;
 }
 esp_err_t esp_littlefs_abs_delete(lfs_t * lfs) {
+    assert(lfs);
+    esp_err_t ret = ESP_FAIL;
+    if (!vlfs_list_lock)
+        return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
+    ret = ESP_OK;
+    free_vlfs(&vlfs);
+
+    ret:
+    xSemaphoreGive(vlfs_list_lock);
+    return ret;
 }
 esp_err_t esp_littlefs_abs_is(lfs_t * lfs) {
+    assert(lfs);
+    esp_err_t ret = ESP_FAIL;
+    if (!vlfs_list_lock)
+        return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
+    ret = ESP_OK;
+
+    ret:
+    xSemaphoreGive(vlfs_list_lock);
+    return ret;
 }
 esp_err_t esp_littlefs_abs_info(lfs_t *lfs, size_t *total_bytes, size_t *used_bytes) {
+    assert(lfs);
+    esp_err_t ret = ESP_FAIL;
+    if (!vlfs_list_lock)
+        return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(vlfs_list_lock, portMAX_DELAY);
+    esp_littlefs_vlfs_t *vlfs = vlfs_list_find_by_lfs(lfs);
+    if (vlfs == NULL) {
+        ret = ESP_ERR_NOT_FOUND;
+        goto ret;
+    }
 
+    if(total_bytes) *total_bytes = vlfs->cfg.block_size * vlfs->cfg.block_count;
+    if(used_bytes) *used_bytes = vlfs->cfg.block_size * lfs_fs_size(&vlfs->lfs);
+
+    ret = ESP_OK;
+
+    ret:
+    xSemaphoreGive(vlfs_list_lock);
+    return ret;
 }
 
 // endregion

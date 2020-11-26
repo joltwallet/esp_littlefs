@@ -28,18 +28,6 @@ esp_err_t esp_littlefs_flash_is(lfs_t * lfs);
  *          - ESP_FAIL    on error
  */
 esp_err_t esp_littlefs_flash_format(const char* partition_label);
-/**
- * Get information for littlefs
- *
- * @param partition_label           Optional, label of the partition to get info for.
- * @param[out] total_bytes          Size of the file system
- * @param[out] used_bytes           Current used bytes in the file system
- *
- * @return
- *          - ESP_OK                  if success
- *          - ESP_ERR_INVALID_STATE   if not a flashfs
- */
-esp_err_t esp_littlefs_flash_info(lfs_t *lfs, size_t *total_bytes, size_t *used_bytes);
 
 #ifdef __cplusplus
 } // extern "C"
