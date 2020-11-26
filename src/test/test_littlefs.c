@@ -1,6 +1,6 @@
 //#define LOG_LOCAL_LEVEL 4
 
-#include "esp_littlefs.h"
+#include "esp_littlefs_vfs.h"
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -14,7 +14,6 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_vfs.h"
-#include "esp_littlefs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -134,7 +133,7 @@ TEST_CASE("r+ mode read and write file", "[littlefs]")
     test_setup();
 
     test_littlefs_create_file_with_text(fn, "foo");
-    
+
     /* Read back the previously written foo, and add bar*/
     {
         FILE* f = fopen(fn, "r+");
@@ -481,7 +480,7 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
 
     char filename[] = littlefs_base_path "/test_esp_littlefs_info.bin";
     unlink(filename);  /* Delete the file incase it exists */
-    
+
     /* Get starting system size */
     size_t total_og = 0, used_og = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_og, &used_og));
@@ -623,7 +622,7 @@ static void test_littlefs_write_file_with_offset(const char *filename)
     int written = pwrite(fd, &new_char, 1, offset);
     TEST_ASSERT_EQUAL(1, written);
     TEST_ASSERT_EQUAL(0, close(fd));
-    
+
     char buf[len];
 
     // Compare if both are equal

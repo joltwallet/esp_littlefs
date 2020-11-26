@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#define ESP_LITTLEFS_FLASH_TAG "LFS_FLASH"
+
 /**
  * @param partition_label Label of the partition to use.
  * @param[out] lfs The newly created little fs.
@@ -18,7 +20,7 @@ esp_err_t esp_littlefs_flash_create(const char *partition_label, lfs_t ** lfs, b
 esp_err_t esp_littlefs_flash_delete(lfs_t * lfs);
 esp_err_t esp_littlefs_flash_is(lfs_t * lfs);
 /**
- * Format the littlefs partition
+ * @brief erase a partition; make sure LittleFS is unmounted first.
  *
  * @param partition_label  Label of the partition to format.
  * @return

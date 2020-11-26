@@ -26,7 +26,7 @@ static size_t vlfs_list_size = 0;
 static size_t vlfs_list_cap = 0;
 
 /**
- * Grows the efs_list to be able to store at least newCap elements.
+ * Grows the vlfs_list to be able to store at least newCap elements.
  * @warning This must be called with the vlfs_list_lock taken
  */
 static esp_err_t vlfs_list_grow_to(size_t newCap) {
@@ -95,7 +95,7 @@ static void free_vlfs(esp_littlefs_vlfs_t **vlfsArg) {
     esp_littlefs_vlfs_t *vlfs = *vlfsArg;
     free_vlfs_fds(vlfs);
 
-    // remove the vlfs from the efs_list
+    // remove the vlfs from the vlfs_list
     vlfs_list_remove(vlfs);
 
     vSemaphoreDelete(vlfs->lock);
