@@ -19,7 +19,7 @@ extern "C" {
  * @return A littlefs instance.
  */
 esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *));
-esp_err_t esp_littlefs_abs_delete(lfs_t * lfs);
+esp_err_t esp_littlefs_abs_delete(lfs_t ** lfs);
 /**
  * Checks if a lfs is managed by the abs api.
  * @param lfs The lfs to check.
