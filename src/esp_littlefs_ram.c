@@ -4,7 +4,7 @@
 
 #include "memory.h"
 
-static const char *const TAG = ESP_LITTLEFS_RAM_TAG;
+// static const char *const TAG = ESP_LITTLEFS_RAM_TAG;
 
 // region little fs hooks
 
@@ -66,10 +66,10 @@ esp_err_t esp_littlefs_ram_create(lfs_t ** lfs, size_t size) {
         config.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         config.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     }
-    esp_littlefs_abs_create(lfs, &config, false, free);
+    return esp_littlefs_abs_create(lfs, &config, false, free);
 }
 esp_err_t esp_littlefs_ram_delete(lfs_t ** lfs) {
-    esp_littlefs_abs_delete(lfs);
+    return esp_littlefs_abs_delete(lfs);
 }
 
 // endregion

@@ -66,7 +66,7 @@ esp_err_t esp_littlefs_flash_create(const char * partition_label, lfs_t ** lfs, 
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_partition_t * partition = esp_partition_find_first(
+    const esp_partition_t * partition = esp_partition_find_first(
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
             partition_label);
 
@@ -77,7 +77,7 @@ esp_err_t esp_littlefs_flash_create(const char * partition_label, lfs_t ** lfs, 
 
     struct lfs_config config = { 0 };
     {/* LittleFS Configuration */
-        config.context = partition;
+        config.context = (void*) partition;
 
         // block device operations
         config.read  = littlefs_api_read;
@@ -94,10 +94,10 @@ esp_err_t esp_littlefs_flash_create(const char * partition_label, lfs_t ** lfs, 
         config.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         config.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     }
-    esp_littlefs_abs_create(lfs, &config, format_on_error, NULL);
+    return esp_littlefs_abs_create(lfs, &config, format_on_error, NULL);
 }
 esp_err_t esp_littlefs_flash_delete(lfs_t ** lfs) {
-    esp_littlefs_abs_delete(lfs);
+    return esp_littlefs_abs_delete(lfs);
 }
 esp_err_t esp_littlefs_flash_format(const char * partition_label) {
     ESP_LOGV(TAG, "Erasing partition...");

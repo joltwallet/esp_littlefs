@@ -21,12 +21,12 @@ extern "C" {
 #define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
 #define ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT() { \
-    .base_path = "/littlefs", \
-    .fs = NULL, \
+    .mount_point = "/littlefs", \
+    .lfs = NULL, \
     .fd_cache_realloc_factor = 2, \
     .fd_cache_min_size = 4, \
     .fd_cache_hyst = 4 \
-};
+}
 
 /**
  * Configuration structure for esp_littlefs_vfs_mount.

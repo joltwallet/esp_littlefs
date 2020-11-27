@@ -57,6 +57,7 @@ static esp_err_t vlfs_list_insert(esp_littlefs_vlfs_t *vlfs) {
     // add the vlfs to the list
     vlfs_list[vlfs_index] = vlfs;
     vlfs_list_size++;
+    return ESP_OK;
 }
 
 /**
