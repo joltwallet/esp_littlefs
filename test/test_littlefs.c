@@ -67,7 +67,7 @@ TEST_CASE("can format mounted partition", "[littlefs]")
     const char* filename = littlefs_base_path "/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     printf("Deleting \"%s\" via formatting fs.\n", filename);
-    esp_littlefs_flash_format(part->label);
+    esp_littlefs_flash_erase(part->label);
     FILE* f = fopen(filename, "r");
     TEST_ASSERT_NULL(f);
     test_teardown();
@@ -85,7 +85,7 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     test_teardown();
 
-    esp_littlefs_flash_format(part->label);
+    esp_littlefs_flash_erase(part->label);
     // Don't use test_setup here, need to mount without formatting
     setup_lfs_flash();
     FILE* f = fopen(filename, "r");
@@ -1001,11 +1001,13 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
 }
 
 static void setup_lfs_flash() {
-    TEST_ESP_OK(esp_littlefs_flash_create(littlefs_test_partition_label, &lfs_flash, true));
-    esp_littlefs_vfs_mount_conf_t conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
-    conf.mount_point = littlefs_base_path;
-    conf.lfs = lfs_flash;
-    TEST_ESP_OK(esp_littlefs_vfs_mount(&conf));
+    esp_littlefs_flash_create_conf_t flash_conf = ESP_LITTLEFS_FLASH_CREATE_CONFIG_DEFAULT();
+    flash_conf.partition_label = littlefs_test_partition_label;
+    TEST_ESP_OK(esp_littlefs_flash_create(&lfs_flash, &flash_conf));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = littlefs_base_path;
+    mount_conf.lfs = lfs_flash;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
     TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
 }
 
@@ -1016,7 +1018,7 @@ static void teardown_lfs_flash() {
 }
 
 static void test_setup() {
-    esp_littlefs_flash_format(littlefs_test_partition_label);
+    esp_littlefs_flash_erase(littlefs_test_partition_label);
     setup_lfs_flash();
     printf("Test setup complete.\n");
 }

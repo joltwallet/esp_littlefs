@@ -13,7 +13,7 @@ extern "C" {
 /**
 * @param[out] lfs The newly created little fs.
 * @param size The amount of ram to reserve.
-* @return A littlefs instance.
+* @return ESP_OK on success.
 */
 esp_err_t esp_littlefs_ram_create(lfs_t ** lfs, size_t size);
 esp_err_t esp_littlefs_ram_delete(lfs_t ** lfs);

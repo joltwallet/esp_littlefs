@@ -30,7 +30,7 @@ extern "C" {
 
 /**
  * Configuration structure for esp_littlefs_vfs_mount.
- * Always initialize this with the following macro to ensure that all fields are filled with valid values.
+ * Always initialize this with the ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT() macro to ensure that all fields are filled with valid values.
  */
 typedef struct {
     /**

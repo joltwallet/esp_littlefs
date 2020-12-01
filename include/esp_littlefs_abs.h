@@ -16,7 +16,7 @@ extern "C" {
  * @param[in] config The little fs configuration. Make sure to zero it out before filling it with values. The config will be copied.
  * @param[in] format_on_error If true the fs is formatted if an error occurs while mounting.
  * @param[in] free_ctx This function will be used to free the context of the lfs_config.
- * @return A littlefs instance.
+ * @return ESP_OK on success.
  */
 esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *));
 esp_err_t esp_littlefs_abs_delete(lfs_t ** lfs);

@@ -2,7 +2,7 @@ LittleFS for ESP-IDF.
 
 # What is LittleFS?
 
-[LittleFS](https://github.com/ARMmbed/littlefs) is a small fail-safe filesystem 
+[LittleFS](https://github.com/littlefs-project/littlefs) is a small fail-safe filesystem 
 for microcontrollers. We ported LittleFS to esp-idf (specifically, the ESP32) 
 because SPIFFS was too slow, and FAT was too fragile.
 
@@ -18,22 +18,54 @@ The library can be configured via `make menuconfig` under `Component config->Lit
 
 # Documentation
 
-See the official ESP-IDF SPIFFS documentation, basically all the functionality is the 
-same; just replace `spiffs` with `littlefs` in all function calls.
+This fork supports multiple backends.
+* RAM backend untested
 
-Also see the comments in `include/esp_littlefs.h`
+    name: ram
+* FLASH backend tested
 
-Slight differences between this configuration and SPIFFS's configuration is in the `esp_vfs_littlefs_conf_t`:
+    name: flash
+* SDCARD backend untested
 
-1. `max_files` field doesn't exist since we removed the file limit, thanks to @X-Ryl669
+    name: sd
+* CUSTOM backend
 
-2. `partition_label` is not allowed to be `NULL`. You must specify the partition name from your partition table. This is because there isn't a define `littlefs` partition subtype in `esp-idf`. The subtype doesn't matter.
+# Builtin backends
 
-# Performance
+```c
+esp_littlefs_backendname_create_conf_t conf = ESP_LITTLEFS_BACKENDNAME_CREATE_CONFIG_DEFAULT();
+// set config here
+lfs_t * lfs;
+ESP_ERROR_CHECK(esp_littlefs_backendname_create(&lfs, &conf));
+// use lfs
+// destroy the lfs - for future compatibility always use the correct function for the each backend
+ESP_ERROR_CHECK(esp_littlefs_backendname_delete(&lfs));
+```
+
+# Custom backend
+
+A custom backend can be built on top of esp_littlefs_abs.h or just by manually creating a lfs_t.
+
+# mount into vfs
+
+```c
+lfs_t * lfs;
+// init lfs with a backend here
+esp_littlefs_vfs_mount_conf_t conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+conf.lfs = lfs;
+// set config here
+ESP_ERROR_CHECK(esp_littlefs_vfs_mount(&conf));
+// use lfs over vfs
+// unmount from vfs
+ESP_ERROR_CHECK(esp_littlefs_vfs_unmount(lfs));
+// destroy the lfs with the correct method for the used backend
+```
+
+# Performance - Test data may not reflect this forks performance
 
 Here are some naive benchmarks to give a vague indicator on performance.
 
-Formatting a ~512KB partition:
+Formatting a ~512KB partition: (This test is currently broken)
 
 ```
 FAT:         963,766 us
@@ -95,18 +127,20 @@ LittleFS***:  20,063 us
 
 # Tips, Tricks, and Gotchas
 
-* LittleFS operates on blocks, and blocks have a size of 4096 bytes on the ESP32.
-
-* A freshly formatted LittleFS will have 2 blocks in use, making it seem like 8KB are in use.
+* A freshly formatted LittleFS will have 2 blocks in use, making it seem like 2*block_size are in use.
 
 # Running Unit Tests
 
 To flash the unit-tester app and the unit-tests, run
 
 
+``` sh
+cd $ENV{IDF_PATH}/tools/unit-test-app
+idf.py -D EXTRA_COMPONENT_DIRS=path\to\folder\that\contains\esp_littlefs\folder -T esp_littlefs menuconfig // change partition table to the partition_table_unit_test_app.csv from this project
+idf.py -D EXTRA_COMPONENT_DIRS=path\to\folder\that\contains\esp_littlefs\folder -T esp_littlefs flash monitor
 ```
-make tests
-```
+
+The following information is from the original repo. I have yet to test this:
 
 To test on an encrypted partition, add the `encrypted` flag to the `flash_test` partition
 in `partition_table_unit_test_app.csv`. I.e.
@@ -128,4 +162,5 @@ make TEST_COMPONENTS='src' encrypted-flash monitor
 
 # Acknowledgement
 
+This code was heavily modeled after the original repo 😉.
 This code base was heavily modeled after the SPIFFS esp-idf component.

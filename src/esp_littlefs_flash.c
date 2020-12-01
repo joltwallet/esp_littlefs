@@ -7,9 +7,6 @@
 #include "esp_partition.h"
 #include "esp_log.h"
 
-/** ESP32 can only operate at 4kb */
-#define CONFIG_LITTLEFS_BLOCK_SIZE 4096
-
 static const char *const TAG = ESP_LITTLEFS_FLASH_TAG;
 
 // region little fs hooks
@@ -59,19 +56,19 @@ static int littlefs_api_sync(const struct lfs_config *c) {
 
 // region public api
 
-esp_err_t esp_littlefs_flash_create(const char * partition_label, lfs_t ** lfs, bool format_on_error) {
+esp_err_t esp_littlefs_flash_create(lfs_t ** lfs, const esp_littlefs_flash_create_conf_t * conf) {
     // get partition details
-    if (partition_label == NULL) {
+    if (conf->partition_label == NULL) {
         ESP_LOGE(TAG, "Partition label must be provided.");
         return ESP_ERR_INVALID_ARG;
     }
 
     const esp_partition_t * partition = esp_partition_find_first(
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
-            partition_label);
+            conf->partition_label);
 
     if (!partition) {
-        ESP_LOGE(TAG, "partition \"%s\" could not be found", partition_label);
+        ESP_LOGE(TAG, "partition \"%s\" could not be found", conf->partition_label);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -86,20 +83,20 @@ esp_err_t esp_littlefs_flash_create(const char * partition_label, lfs_t ** lfs, 
         config.sync  = littlefs_api_sync;
 
         // block device configuration
-        config.read_size = CONFIG_LITTLEFS_READ_SIZE;
-        config.prog_size = CONFIG_LITTLEFS_WRITE_SIZE;
-        config.block_size = CONFIG_LITTLEFS_BLOCK_SIZE;;
+        config.read_size = conf->lfs_read_size;
+        config.prog_size = conf->lfs_prog_size;
+        config.block_size = 4096; // ESP32 can only operate at 4kb
         config.block_count = partition->size / config.block_size;
-        config.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
-        config.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
-        config.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
+        config.cache_size = conf->lfs_cache_size;
+        config.lookahead_size = conf->lfs_lookahead_size;
+        config.block_cycles = conf->lfs_block_cycles;
     }
-    return esp_littlefs_abs_create(lfs, &config, format_on_error, NULL);
+    return esp_littlefs_abs_create(lfs, &config, conf->format_on_error, NULL);
 }
 esp_err_t esp_littlefs_flash_delete(lfs_t ** lfs) {
     return esp_littlefs_abs_delete(lfs);
 }
-esp_err_t esp_littlefs_flash_format(const char * partition_label) {
+esp_err_t esp_littlefs_flash_erase(const char * partition_label) {
     ESP_LOGV(TAG, "Erasing partition...");
 
     const esp_partition_t* partition = esp_partition_find_first(

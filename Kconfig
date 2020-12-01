@@ -1,24 +1,5 @@
 menu "LittleFS"
 
-    config LITTLEFS_MAX_PARTITIONS
-        int "Maximum Number of Partitions"
-        default 3
-        range 1 10
-        help
-            Define maximum number of partitions that can be mounted.
-
-    config LITTLEFS_PAGE_SIZE
-        int "SPIFFS logical page size"
-        default 256
-        range 256 1024
-        help
-            Logical page size of LITTLEFS partition, in bytes. Must be multiple
-            of flash page size (which is usually 256 bytes).
-            Larger page sizes reduce overhead when storing large files, and
-            improve filesystem performance when reading large files.
-            Smaller page sizes reduce overhead when storing small (< page size)
-            files.
-
     config LITTLEFS_OBJ_NAME_LEN
         int "Maximum object name length including NULL terminator."
         default 64
@@ -26,53 +7,12 @@ menu "LittleFS"
         help
             Includes NULL-terminator.
 
-    config LITTLEFS_READ_SIZE
-        int "Minimum size of a block read."
-        default 128
-        help
-            Minimum size of a block read. All read operations will be a
-            multiple of this value.
-
-    config LITTLEFS_WRITE_SIZE
-        int "Minimum size of a block write."
-        default 128
-        help
-            Minimum size of a block program. All write operations will be a
-            multiple of this value.
-
-    config LITTLEFS_LOOKAHEAD_SIZE
-        int "Look ahead size."
-        default 128
-        help
-            Look ahead size. Must be a multiple of 8.
-
-    config LITTLEFS_CACHE_SIZE
-        int "Cache Size"
-        default 512
-        help
-            Size of block caches. Each cache buffers a portion of a block in RAM.
-            The littlefs needs a read cache, a program cache, and one additional
-            cache per file. Larger caches can improve performance by storing more
-            data and reducing the number of disk accesses. Must be a multiple of
-            the read and program sizes, and a factor of the block size (4096).
-
-    config LITTLEFS_BLOCK_CYCLES
-        int "LittleFS wear-leveling block cycles"
-        default 512
-        range -1 1024
-        help
-            Number of erase cycles before littlefs evicts metadata logs and moves 
-            the metadata to another block. Suggested values are in the
-            range 100-1000, with large values having better performance at the cost
-            of less consistent wear distribution.
-            Set to -1 to disable block-level wear-leveling.
-
     config LITTLEFS_USE_MTIME
         bool "Save file modification time"
         default "y"
         help
             Saves timestamp on modification. Uses an additional 4bytes.
-    
+
     config LITTLEFS_USE_ONLY_HASH
         bool "Don't store filepath in the file descriptor"
         default "n"
@@ -80,7 +20,7 @@ menu "LittleFS"
             Records the filepath only as a 32-bit hash in the file descriptor instead
             of the entire filepath. Saves approximately `sizeof(filepath)` bytes
             per file descriptor.
-            If enabled, functionality (like fstat) that requires the file path 
+            If enabled, functionality (like fstat) that requires the file path
             from the file descriptor will not work.
             In rare cases, may cause unlinking or renaming issues (unlikely) if
             there's a hash collision between an open filepath and a filepath
@@ -111,7 +51,7 @@ menu "LittleFS"
                 Saves nonce on modification; intended for detecting filechanges
                 on systems without access to a RTC.
 
-                A file who's nonce is the same as it was at a previous time has 
+                A file who's nonce is the same as it was at a previous time has
                 high probability of not having been modified.
 
                 Upon file modification, the nonce is incremented by one. Upon file
@@ -127,7 +67,7 @@ menu "LittleFS"
         default "n"
         help
             Enabling this feature allows for greater drop-in compatability
-            when replacing SPIFFS. Since SPIFFS doesn't have folders, and 
+            when replacing SPIFFS. Since SPIFFS doesn't have folders, and
             folders are just considered as part of a file name, enabling this
             will automatically create folders as necessary to create a file
             instead of throwing an error. Similarly, upon the deletion of the

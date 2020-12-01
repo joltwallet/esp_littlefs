@@ -66,20 +66,23 @@ static lfs_t * lfs_flash = NULL;
 static lfs_t * lfs_ram = NULL;
 
 static void setup_littlefs_flash() {
-    esp_littlefs_flash_format("flash_test");
-    TEST_ESP_OK(esp_littlefs_flash_create("flash_test", &lfs_flash, true));
-    esp_littlefs_vfs_mount_conf_t conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
-    conf.mount_point = "/littlefs_flash";
-    conf.lfs = lfs_flash;
-    TEST_ESP_OK(esp_littlefs_vfs_mount(&conf));
+    esp_littlefs_flash_erase("flash_test");
+
+    esp_littlefs_flash_create_conf_t flash_conf = ESP_LITTLEFS_FLASH_CREATE_CONFIG_DEFAULT();
+    flash_conf.partition_label = "flash_test";
+    TEST_ESP_OK(esp_littlefs_flash_create(&lfs_flash, &flash_conf));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = "/littlefs_flash";
+    mount_conf.lfs = lfs_flash;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
 }
 
 static void setup_littlefs_ram() {
     TEST_ESP_OK(esp_littlefs_ram_create(&lfs_ram, 16384));
-    esp_littlefs_vfs_mount_conf_t conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
-    conf.mount_point = "/littlefs_ram";
-    conf.lfs = lfs_ram;
-    TEST_ESP_OK(esp_littlefs_vfs_mount(&conf));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = "/littlefs_ram";
+    mount_conf.lfs = lfs_ram;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
 }
 
 static void test_setup() {
