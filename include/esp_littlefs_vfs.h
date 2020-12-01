@@ -36,7 +36,7 @@ typedef struct {
     /**
      * The path to mount the fs into.
      */
-    const char * mount_point;
+    const char *mount_point;
     /**
      * The littlefs to mount. The lfs_t must be valid until esp_littlefs_vfs_unmount is called.
      */
@@ -58,20 +58,24 @@ typedef struct {
 /**
  * Mounts a littlefs into the esp vfs. After this function has been called the provided littlefs api must not be used directly on the lfs_t instance. Instead use the vfs.
  */
-esp_err_t esp_littlefs_vfs_mount(const esp_littlefs_vfs_mount_conf_t * conf);
+esp_err_t esp_littlefs_vfs_mount(const esp_littlefs_vfs_mount_conf_t *conf);
+
 /**
  * Unmounts a littlefs from the esp vfs. After this function the littlefs api can be used on the lfs_t instance again.
  * @param lfs The littlefs to unmount.
  */
 esp_err_t esp_littlefs_vfs_unmount(lfs_t *lfs);
+
 /**
  * @return This function returns the the path the littlefs was mounted under. If this littlefs is not mounted NULL is returned.
  */
-const char * esp_littlefs_vfs_mount_point(lfs_t *lfs);
+const char *esp_littlefs_vfs_mount_point(lfs_t *lfs);
+
 /**
  * This function can be used to acquire a lock on the lfs_t instance to use the littlefs api directly while still leaving the lfs_t mounted in the vfs. NOT RECOMMENDED.
  */
 esp_err_t esp_littlefs_vfs_lock(lfs_t *lfs);
+
 esp_err_t esp_littlefs_vfs_unlock(lfs_t *lfs);
 
 #if CONFIG_LITTLEFS_HUMAN_READABLE

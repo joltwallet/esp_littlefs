@@ -55,8 +55,10 @@ typedef struct {
  * @param[out] lfs The newly created little fs.
  * @return ESP_OK on success.
  */
-esp_err_t esp_littlefs_sd_create(lfs_t ** lfs, const esp_littlefs_sd_create_conf_t * conf);
-esp_err_t esp_littlefs_sd_delete(lfs_t ** lfs);
+esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf);
+
+esp_err_t esp_littlefs_sd_delete(lfs_t **lfs);
+
 /**
  * @brief erase the sdcard; make sure LittleFS is unmounted first.
  *
@@ -65,7 +67,7 @@ esp_err_t esp_littlefs_sd_delete(lfs_t ** lfs);
  *          - ESP_OK      if successful
  *          - ESP_FAIL    on error
  */
-esp_err_t esp_littlefs_sd_erase(sdmmc_card_t * sdCard);
+esp_err_t esp_littlefs_sd_erase(sdmmc_card_t *sdCard);
 
 #ifdef __cplusplus
 } // extern "C"

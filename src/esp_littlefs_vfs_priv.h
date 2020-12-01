@@ -77,9 +77,12 @@ typedef struct {
 } esp_littlefs_vfs_dir_t;
 
 static void free_vlfs_fds(esp_littlefs_vlfs_t *vlfs);
-static int vfs_readdir_r(void* ctx, DIR* pdir, struct dirent* entry, struct dirent** out_dirent);
-static int vfs_mkdir(void* ctx, const char* name, mode_t mode);
-static int vfs_rmdir(void* ctx, const char* name);
+
+static int vfs_readdir_r(void *ctx, DIR *pdir, struct dirent *entry, struct dirent **out_dirent);
+
+static int vfs_mkdir(void *ctx, const char *name, mode_t mode);
+
+static int vfs_rmdir(void *ctx, const char *name);
 
 #ifdef __cplusplus
 } // extern "C"

@@ -18,14 +18,18 @@ extern "C" {
  * @param[in] free_ctx This function will be used to free the context of the lfs_config.
  * @return ESP_OK on success.
  */
-esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *));
-esp_err_t esp_littlefs_abs_delete(lfs_t ** lfs);
+esp_err_t
+esp_littlefs_abs_create(lfs_t **lfs, struct lfs_config *config, bool format_on_error, void (*free_ctx)(void *));
+
+esp_err_t esp_littlefs_abs_delete(lfs_t **lfs);
+
 /**
  * Checks if a lfs is managed by the abs api.
  * @param lfs The lfs to check.
  * @return ESP_OK if this lfs is managed by the abs api. ESP_ERR_NOT_FOUND if this is not managed by the abs api.
  */
-esp_err_t esp_littlefs_abs_is(lfs_t * lfs);
+esp_err_t esp_littlefs_abs_is(lfs_t *lfs);
+
 /**
  * Get information for littlefs
  *

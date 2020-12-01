@@ -16,6 +16,7 @@ typedef struct {
      * littlefs mount configuration
      */
     struct lfs_config cfg;
+
     void (*free_ctx)(void *);
 } esp_littlefs_vlfs_t;
 

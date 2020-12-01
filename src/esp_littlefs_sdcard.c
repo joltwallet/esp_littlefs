@@ -11,7 +11,7 @@ static const char *const TAG = ESP_LITTLEFS_SD_TAG;
 
 static int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
                              lfs_off_t off, void *buffer, lfs_size_t size) {
-    sdmmc_card_t * sd = c->context;
+    sdmmc_card_t *sd = c->context;
     esp_err_t err = sdmmc_read_sectors(sd, buffer, block + off / c->block_size, size / c->block_size);
     if (err) {
         size_t part_off = (block * c->block_size) + off;
@@ -23,7 +23,7 @@ static int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
 
 static int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
                              lfs_off_t off, const void *buffer, lfs_size_t size) {
-    sdmmc_card_t * sd = c->context;
+    sdmmc_card_t *sd = c->context;
     esp_err_t err = sdmmc_write_sectors(sd, buffer, block + off / c->block_size, size / c->block_size);
     if (err) {
         size_t part_off = (block * c->block_size) + off;
@@ -46,22 +46,22 @@ static int littlefs_api_sync(const struct lfs_config *c) {
 
 // region public api
 
-esp_err_t esp_littlefs_sd_create(lfs_t ** lfs, const esp_littlefs_sd_create_conf_t * conf) {
+esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf) {
     // get partition details
     if (conf->sd_card == NULL) {
         ESP_LOGE(TAG, "Sdcard must be provided.");
         return ESP_ERR_INVALID_ARG;
     }
 
-    struct lfs_config config = { 0 };
+    struct lfs_config config = {0};
     {/* LittleFS Configuration */
-        config.context = (void*) conf->sd_card;
+        config.context = (void *) conf->sd_card;
 
         // block device operations
-        config.read  = littlefs_api_read;
-        config.prog  = littlefs_api_prog;
+        config.read = littlefs_api_read;
+        config.prog = littlefs_api_prog;
         config.erase = littlefs_api_erase;
-        config.sync  = littlefs_api_sync;
+        config.sync = littlefs_api_sync;
 
         // block device configuration
         config.read_size = conf->sd_card->csd.sector_size;
@@ -74,12 +74,14 @@ esp_err_t esp_littlefs_sd_create(lfs_t ** lfs, const esp_littlefs_sd_create_conf
     }
     return esp_littlefs_abs_create(lfs, &config, conf->format_on_error, NULL);
 }
-esp_err_t esp_littlefs_sd_delete(lfs_t ** lfs) {
+
+esp_err_t esp_littlefs_sd_delete(lfs_t **lfs) {
     return esp_littlefs_abs_delete(lfs);
 }
-esp_err_t esp_littlefs_sd_erase(sdmmc_card_t * sdCard) {
+
+esp_err_t esp_littlefs_sd_erase(sdmmc_card_t *sdCard) {
     ESP_LOGV(TAG, "Erasing sdcard...");
-    void * tmp = malloc(sdCard->csd.sector_size);
+    void *tmp = malloc(sdCard->csd.sector_size);
     if (!tmp)
         return ESP_ERR_NO_MEM;
     memset(tmp, 0, sdCard->csd.sector_size);

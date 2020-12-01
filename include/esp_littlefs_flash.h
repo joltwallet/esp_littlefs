@@ -64,8 +64,10 @@ typedef struct {
  * @param[out] lfs The newly created little fs.
  * @return ESP_OK on success.
  */
-esp_err_t esp_littlefs_flash_create(lfs_t ** lfs, const esp_littlefs_flash_create_conf_t * conf);
-esp_err_t esp_littlefs_flash_delete(lfs_t ** lfs);
+esp_err_t esp_littlefs_flash_create(lfs_t **lfs, const esp_littlefs_flash_create_conf_t *conf);
+
+esp_err_t esp_littlefs_flash_delete(lfs_t **lfs);
+
 /**
  * @brief erase a partition; make sure LittleFS is unmounted first.
  *
@@ -74,7 +76,7 @@ esp_err_t esp_littlefs_flash_delete(lfs_t ** lfs);
  *          - ESP_OK      if successful
  *          - ESP_FAIL    on error
  */
-esp_err_t esp_littlefs_flash_erase(const char* partition_label);
+esp_err_t esp_littlefs_flash_erase(const char *partition_label);
 
 #ifdef __cplusplus
 } // extern "C"

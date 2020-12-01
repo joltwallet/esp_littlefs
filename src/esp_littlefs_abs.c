@@ -113,7 +113,8 @@ static void free_vlfs(esp_littlefs_vlfs_t **vlfsArg) {
 /**
  * @warning This must be called with the vlfs_list_lock taken
  */
-static esp_err_t create_vlfs(esp_littlefs_vlfs_t **vlfsArg, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *)) {
+static esp_err_t
+create_vlfs(esp_littlefs_vlfs_t **vlfsArg, struct lfs_config *config, bool format_on_error, void (*free_ctx)(void *)) {
     esp_err_t err = ESP_FAIL;
     esp_littlefs_vlfs_t *vlfs = malloc(sizeof(esp_littlefs_vlfs_t));
     if (vlfs == NULL) {
@@ -161,7 +162,8 @@ static esp_err_t create_vlfs(esp_littlefs_vlfs_t **vlfsArg, struct lfs_config * 
 
 // region public api
 
-esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool format_on_error, void (*free_ctx)(void *)) {
+esp_err_t
+esp_littlefs_abs_create(lfs_t **lfs, struct lfs_config *config, bool format_on_error, void (*free_ctx)(void *)) {
     assert(lfs);
     assert(config);
 
@@ -185,7 +187,8 @@ esp_err_t esp_littlefs_abs_create(lfs_t ** lfs, struct lfs_config * config, bool
     xSemaphoreGive(vlfs_list_lock);
     return err;
 }
-esp_err_t esp_littlefs_abs_delete(lfs_t ** lfs) {
+
+esp_err_t esp_littlefs_abs_delete(lfs_t **lfs) {
     assert(lfs);
     esp_err_t ret = ESP_FAIL;
     if (!vlfs_list_lock)
@@ -205,7 +208,8 @@ esp_err_t esp_littlefs_abs_delete(lfs_t ** lfs) {
     xSemaphoreGive(vlfs_list_lock);
     return ret;
 }
-esp_err_t esp_littlefs_abs_is(lfs_t * lfs) {
+
+esp_err_t esp_littlefs_abs_is(lfs_t *lfs) {
     assert(lfs);
     esp_err_t ret = ESP_FAIL;
     if (!vlfs_list_lock)
@@ -223,6 +227,7 @@ esp_err_t esp_littlefs_abs_is(lfs_t * lfs) {
     xSemaphoreGive(vlfs_list_lock);
     return ret;
 }
+
 esp_err_t esp_littlefs_abs_info(lfs_t *lfs, size_t *total_bytes, size_t *used_bytes) {
     assert(lfs);
     esp_err_t ret = ESP_FAIL;
@@ -235,8 +240,8 @@ esp_err_t esp_littlefs_abs_info(lfs_t *lfs, size_t *total_bytes, size_t *used_by
         goto ret;
     }
 
-    if(total_bytes) *total_bytes = vlfs->cfg.block_size * vlfs->cfg.block_count;
-    if(used_bytes) *used_bytes = vlfs->cfg.block_size * lfs_fs_size(&vlfs->lfs);
+    if (total_bytes) *total_bytes = vlfs->cfg.block_size * vlfs->cfg.block_count;
+    if (used_bytes) *used_bytes = vlfs->cfg.block_size * lfs_fs_size(&vlfs->lfs);
 
     ret = ESP_OK;
 
