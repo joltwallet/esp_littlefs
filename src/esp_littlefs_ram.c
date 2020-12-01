@@ -12,7 +12,7 @@ static int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
                       lfs_off_t off, void *buffer, lfs_size_t size) {
     void * mem = c->context;
     size_t part_off = (block * c->block_size) + off;
-    memmove(buffer, mem + part_off, size);
+    memcpy(buffer, mem + part_off, size);
     return 0;
 }
 
@@ -27,6 +27,7 @@ static int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
 static int littlefs_api_erase(const struct lfs_config *c, lfs_block_t block) {
     void * mem = c->context;
     size_t part_off = block * c->block_size;
+    // might not be needed
     memset(mem + part_off, 1, c->block_size);
     return 0;
 }
@@ -66,7 +67,7 @@ esp_err_t esp_littlefs_ram_create(lfs_t ** lfs, size_t size) {
         config.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         config.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     }
-    return esp_littlefs_abs_create(lfs, &config, false, free);
+    return esp_littlefs_abs_create(lfs, &config, true, free);
 }
 esp_err_t esp_littlefs_ram_delete(lfs_t ** lfs) {
     return esp_littlefs_abs_delete(lfs);

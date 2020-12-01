@@ -32,7 +32,7 @@ static size_t vlfs_list_cap = 0;
 static esp_err_t vlfs_list_grow_to(size_t newCap) {
     if (newCap <= vlfs_list_cap)
         return ESP_OK;
-    esp_littlefs_vlfs_t **tmp = realloc(vlfs_list, newCap);
+    esp_littlefs_vlfs_t **tmp = realloc(vlfs_list, newCap * sizeof(esp_littlefs_vlfs_t *));
     if (tmp == NULL)
         return ESP_ERR_NO_MEM;
     vlfs_list = tmp;
@@ -65,15 +65,17 @@ static esp_err_t vlfs_list_insert(esp_littlefs_vlfs_t *vlfs) {
  */
 static esp_err_t vlfs_list_remove(esp_littlefs_vlfs_t *vlfs) {
     // find the first matching vlfs
-    size_t vlfs_index = 0;
-    while (vlfs_index < vlfs_list_cap && vlfs_list[vlfs_index] != vlfs)
-        vlfs_index++;
-    if (vlfs_index >= vlfs_list_cap)
-        return ESP_ERR_NOT_FOUND;
-    // remove the vlfs from the list
-    vlfs_list[vlfs_index] = NULL;
-    vlfs_list_size--;
-    return ESP_OK;
+    for (size_t vlfs_index = 0; vlfs_index < vlfs_list_cap; vlfs_index++) {
+        if (vlfs_list[vlfs_index] == NULL)
+            continue;
+        if (vlfs_list[vlfs_index] == vlfs) {
+            // remove the vlfs from the list
+            vlfs_list[vlfs_index] = NULL;
+            vlfs_list_size--;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
 }
 
 /**
@@ -81,12 +83,13 @@ static esp_err_t vlfs_list_remove(esp_littlefs_vlfs_t *vlfs) {
  */
 static esp_littlefs_vlfs_t *vlfs_list_find_by_lfs(lfs_t *lfs) {
     // find the first matching vlfs
-    size_t vlfs_index = 0;
-    while (vlfs_index < vlfs_list_cap && vlfs_list[vlfs_index]->conf.lfs != lfs)
-        vlfs_index++;
-    if (vlfs_index >= vlfs_list_cap)
-        return NULL;
-    return vlfs_list[vlfs_index];
+    for (size_t vlfs_index = 0; vlfs_index < vlfs_list_cap; vlfs_index++) {
+        if (vlfs_list[vlfs_index] == NULL)
+            continue;
+        if (vlfs_list[vlfs_index]->conf.lfs == lfs)
+            return vlfs_list[vlfs_index];
+    }
+    return NULL;
 }
 
 /**

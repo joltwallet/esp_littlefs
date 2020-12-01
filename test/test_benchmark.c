@@ -5,7 +5,6 @@
 #include "esp_timer.h"
 #include "esp_vfs.h"
 #include "esp_vfs_fat.h"
-#include "esp_littlefs.h"
 #include "unity.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,9 +75,9 @@ static void setup_littlefs_flash() {
 }
 
 static void setup_littlefs_ram() {
-    TEST_ESP_OK(esp_littlefs_ram_create(&lfs_ram, 8192));
+    TEST_ESP_OK(esp_littlefs_ram_create(&lfs_ram, 16384));
     esp_littlefs_vfs_mount_conf_t conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
-    conf.mount_point = "/littlef_ram";
+    conf.mount_point = "/littlefs_ram";
     conf.lfs = lfs_ram;
     TEST_ESP_OK(esp_littlefs_vfs_mount(&conf));
 }
@@ -242,7 +241,8 @@ static void read_write_test_1(const char *mount_pt, uint32_t iter) {
 }
 
 
-TEST_CASE("Format", TAG){
+TEST_CASE("Format", TAG) {
+    ESP_LOGE(TAG, "This test is broken");
     uint64_t t_fat, t_spiffs, t_littlefs, t_start;
 
     fill_partitions();
@@ -254,12 +254,12 @@ TEST_CASE("Format", TAG){
 
     t_start = esp_timer_get_time();
     setup_fat();
-    assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
+    TEST_ESP_OK(esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
     t_fat = esp_timer_get_time() - t_start;
     printf("FAT Formatted in %lld us\n", t_fat);
 
     t_start = esp_timer_get_time();
-    lfs_format(lfs_ram, lfs_flash->cfg);
+    lfs_format(lfs_ram, lfs_ram->cfg);
     t_littlefs = esp_timer_get_time() - t_start;
     printf("LittleFS ram Formatted in %lld us\n", t_littlefs);
 
@@ -281,9 +281,9 @@ TEST_CASE("Write 5 files, read 5 files, then delete 5 files", TAG){
     read_write_test_1("/spiffs", 5);
     printf("\n");
 
-    printf("LittleFS ram:\n");
-    read_write_test_1("/littlefs_ram", 5);
-    printf("\n");
+    // printf("LittleFS ram:\n");
+    // read_write_test_1("/littlefs_ram", 5);
+    // printf("\n");
 
     printf("LittleFS flash:\n");
     read_write_test_1("/littlefs_flash", 5);
