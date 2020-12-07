@@ -1,9 +1,10 @@
 #ifndef ESP_LITTLEFS_SDCARD_H
 #define ESP_LITTLEFS_SDCARD_H
 
+#include "../src/littlefs/lfs.h"
+
 #include "esp_err.h"
 #include "driver/sdmmc_types.h"
-#include "littlefs/lfs.h"
 
 #ifdef __cplusplus
 extern "C" {

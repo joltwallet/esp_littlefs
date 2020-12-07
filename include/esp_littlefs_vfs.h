@@ -1,7 +1,8 @@
 #ifndef ESP_LITTLEFS_VFS_H
 #define ESP_LITTLEFS_VFS_H
 
-#include "littlefs/lfs.h"
+#include "../src/littlefs/lfs.h"
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
