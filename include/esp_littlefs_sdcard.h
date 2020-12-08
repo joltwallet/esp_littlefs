@@ -13,7 +13,6 @@ extern "C" {
 #define ESP_LITTLEFS_SD_TAG "LFS_FLASH"
 
 #define ESP_LITTLEFS_SD_CREATE_CONFIG_DEFAULT() { \
-    .sd_card = NULL, \
     .format_on_error = true, \
     .lfs_cache_size = 512, \
     .lfs_lookahead_size = 128, \
@@ -28,7 +27,7 @@ typedef struct {
     /**
      * The sd card to use.
      */
-    sdmmc_card_t *sd_card;
+    sdmmc_card_t sd_card;
     bool format_on_error;
     /**
      * Size of block caches. Each cache buffers a portion of a block in RAM.
@@ -54,6 +53,7 @@ typedef struct {
 
 /**
  * @param[out] lfs The newly created little fs.
+ * @param conf The config. Make sure to init the sd_card member.
  * @return ESP_OK on success.
  */
 esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf);

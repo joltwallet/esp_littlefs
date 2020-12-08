@@ -47,15 +47,9 @@ static int littlefs_api_sync(const struct lfs_config *c) {
 // region public api
 
 esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf) {
-    // get partition details
-    if (conf->sd_card == NULL) {
-        ESP_LOGE(TAG, "Sdcard must be provided.");
-        return ESP_ERR_INVALID_ARG;
-    }
-
     struct lfs_config config = {0};
     {/* LittleFS Configuration */
-        config.context = (void *) conf->sd_card;
+        config.context = (void *) &conf->sd_card;
 
         // block device operations
         config.read = littlefs_api_read;
@@ -64,10 +58,10 @@ esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_
         config.sync = littlefs_api_sync;
 
         // block device configuration
-        config.read_size = conf->sd_card->csd.sector_size;
-        config.prog_size = conf->sd_card->csd.sector_size;
-        config.block_size = conf->sd_card->csd.sector_size;
-        config.block_count = conf->sd_card->csd.capacity;
+        config.read_size = conf->sd_card.csd.sector_size;
+        config.prog_size = conf->sd_card.csd.sector_size;
+        config.block_size = conf->sd_card.csd.sector_size;
+        config.block_count = conf->sd_card.csd.capacity;
         config.cache_size = conf->lfs_cache_size;
         config.lookahead_size = conf->lfs_lookahead_size;
         config.block_cycles = conf->lfs_block_cycles;
