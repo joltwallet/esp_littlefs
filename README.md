@@ -17,6 +17,10 @@ git submodule update --init --recursive
 
 The library can be configured via `make menuconfig` under `Component config->LittleFS`.
 
+### Example
+User @wreyford has kindly provided a demo repo showing the use of `esp_littlefs`:
+https://github.com/wreyford/demo_esp_littlefs
+
 # Documentation
 
 See the official ESP-IDF SPIFFS documentation, basically all the functionality is the 
