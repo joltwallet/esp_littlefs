@@ -54,6 +54,7 @@ typedef struct {
 
 /**
  * @param[out] lfs The newly created little fs.
+ * @param conf The config. Make sure to init the sd_card member.
  * @return ESP_OK on success.
  */
 esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf);
