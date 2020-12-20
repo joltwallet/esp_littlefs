@@ -97,12 +97,15 @@ static esp_littlefs_vlfs_t *vlfs_list_find_by_lfs(lfs_t *lfs) {
  */
 static void free_vlfs(esp_littlefs_vlfs_t **vlfsArg) {
     esp_littlefs_vlfs_t *vlfs = *vlfsArg;
+    // also frees the cache
     free_vlfs_fds(vlfs);
-
     // remove the vlfs from the vlfs_list
     vlfs_list_remove(vlfs);
 
-    vSemaphoreDelete(vlfs->lock);
+    if (vlfs->conf.mount_point != NULL)
+        free(vlfs->conf.mount_point);
+    if (vlfs->lock != NULL)
+        vSemaphoreDelete(vlfs->lock);
     free(vlfs);
 
     *vlfsArg = NULL;
@@ -112,22 +115,28 @@ static void free_vlfs(esp_littlefs_vlfs_t **vlfsArg) {
  * @warning This must be called with the vlfs_list_lock taken
  */
 static esp_err_t create_vlfs(const esp_littlefs_vfs_mount_conf_t *conf, esp_littlefs_vlfs_t **vlfsArg) {
-    esp_littlefs_vlfs_t *vlfs = malloc(sizeof(esp_littlefs_vlfs_t));
+    esp_littlefs_vlfs_t *vlfs = calloc(1, sizeof(esp_littlefs_vlfs_t));
     if (vlfs == NULL)
         return ESP_ERR_NO_MEM;
     vlfs->conf = *conf;
 
+    // dup the mount_point string
+    vlfs->conf.mount_point = strdup(vlfs->conf.mount_point);
+    if (vlfs->conf.mount_point == NULL) {
+        free_vlfs(vlfsArg);
+        return ESP_ERR_NO_MEM;
+    }
+
     vlfs->cache_size = 4;
     vlfs->cache = calloc(sizeof(esp_littlefs_vfs_file_t *), vlfs->cache_size);
     if (vlfs->cache == NULL) {
-        free(vlfs);
+        free_vlfs(vlfsArg);
         return ESP_ERR_NO_MEM;
     }
 
     vlfs->lock = xSemaphoreCreateMutex();
     if (vlfs->lock == NULL) {
-        free(vlfs->cache);
-        free(vlfs);
+        free_vlfs(vlfsArg);
         return ESP_ERR_NO_MEM;
     }
 

@@ -99,7 +99,7 @@ static void free_vlfs(esp_littlefs_vlfs_t **vlfsArg) {
         ESP_LOGE(TAG, "Error unmounting littlefs!");
 
     // free the context
-    if (vlfs->free_ctx != NULL && vlfs->cfg.context != NULL)
+    if (vlfs->free_ctx != NULL)
         vlfs->free_ctx(vlfs->cfg.context);
 
     // remove the vlfs from the vlfs_list
@@ -151,7 +151,7 @@ create_vlfs(esp_littlefs_vlfs_t **vlfsArg, struct lfs_config *config, bool forma
     ret:
     if (vlfs != NULL)
         free(vlfs);
-    if (free_ctx != NULL && config->context != NULL)
+    if (free_ctx != NULL)
         free_ctx(config->context);
     return err;
 }

@@ -1,5 +1,6 @@
-#include <memory.h>
 #include "esp_littlefs_sdcard.h"
+
+#include <memory.h>
 
 #include "esp_littlefs_abs.h"
 #include "esp_log.h"
@@ -47,15 +48,17 @@ static int littlefs_api_sync(const struct lfs_config *c) {
 // region public api
 
 esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_t *conf) {
-    // get partition details
     if (conf->sd_card == NULL) {
         ESP_LOGE(TAG, "Sdcard must be provided.");
         return ESP_ERR_INVALID_ARG;
     }
-
+    sdmmc_card_t * sd_storage = malloc(sizeof(sdmmc_card_t));
+    if (sd_storage == NULL)
+        return ESP_ERR_NO_MEM;
+    *sd_storage = *conf->sd_card;
     struct lfs_config config = {0};
     {/* LittleFS Configuration */
-        config.context = (void *) conf->sd_card;
+        config.context = sd_storage;
 
         // block device operations
         config.read = littlefs_api_read;
@@ -72,7 +75,7 @@ esp_err_t esp_littlefs_sd_create(lfs_t **lfs, const esp_littlefs_sd_create_conf_
         config.lookahead_size = conf->lfs_lookahead_size;
         config.block_cycles = conf->lfs_block_cycles;
     }
-    return esp_littlefs_abs_create(lfs, &config, conf->format_on_error, NULL);
+    return esp_littlefs_abs_create(lfs, &config, conf->format_on_error, free);
 }
 
 esp_err_t esp_littlefs_sd_delete(lfs_t **lfs) {
