@@ -1060,11 +1060,13 @@ static int vfs_unlink(void *ctx, const char *path) {
         return -1;
     }
 
+#ifndef CONFIG_LITTLEFS_UNLINK_CAN_RMDIR
     if (info.type == LFS_TYPE_DIR) {
         sem_give(vlfs);
         ESP_LOGV(TAG, "Cannot unlink a directory.");
         return LFS_ERR_ISDIR;
     }
+#endif  // CONFIG_LITTLEFS_UNLINK_CAN_RMDIR
 
     res = lfs_remove(vlfs->conf.lfs, path);
     if (res < 0) {
