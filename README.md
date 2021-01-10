@@ -12,9 +12,14 @@ In your project, add this as a submodule to your `components/` directory.
 
 ```
 git submodule add https://github.com/joltwallet/esp_littlefs.git
+git submodule update --init --recursive
 ```
 
 The library can be configured via `make menuconfig` under `Component config->LittleFS`.
+
+### Example
+User @wreyford has kindly provided a demo repo showing the use of `esp_littlefs`:
+https://github.com/wreyford/demo_esp_littlefs
 
 # Documentation
 
