@@ -26,6 +26,13 @@ menu "LittleFS"
             there's a hash collision between an open filepath and a filepath
             to be modified.
 
+    config LITTLEFS_UNLINK_CAN_RMDIR
+        bool "Allow unlink to delete empty directories"
+        default "n"
+        help
+            Setting this to true allows the remove function to delete empty directories. https://www.cplusplus.com/reference/cstdio/remove/
+            This is necessary for the ghc::filesystem to be able to delete folders.
+
     config LITTLEFS_HUMAN_READABLE
         bool "Make errno human-readable"
         default "n"
