@@ -5,12 +5,15 @@
 #include "esp_timer.h"
 #include "esp_vfs.h"
 #include "esp_vfs_fat.h"
-#include "esp_littlefs.h"
 #include "unity.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_partition.h"
+
+#include "esp_littlefs_ram.h"
+#include "esp_littlefs_flash.h"
+#include "esp_littlefs_vfs.h"
 
 static const char TAG[] = "[benchmark]";
 
@@ -59,28 +62,45 @@ static void setup_fat(){
     }
 }
 
-static void setup_littlefs() {
-    esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/littlefs",
-        .partition_label = "flash_test",
-        .format_if_mount_failed = true
-    };
-    TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
-    esp_littlefs_format("flash_test");
+static lfs_t * lfs_flash = NULL;
+static lfs_t * lfs_ram = NULL;
+
+static void setup_littlefs_flash() {
+    esp_littlefs_flash_erase("flash_test");
+
+    esp_littlefs_flash_create_conf_t flash_conf = ESP_LITTLEFS_FLASH_CREATE_CONFIG_DEFAULT();
+    flash_conf.partition_label = "flash_test";
+    TEST_ESP_OK(esp_littlefs_flash_create(&lfs_flash, &flash_conf));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = "/littlefs_flash";
+    mount_conf.lfs = lfs_flash;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
+}
+
+static void setup_littlefs_ram() {
+    TEST_ESP_OK(esp_littlefs_ram_create(&lfs_ram, 16384));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = "/littlefs_ram";
+    mount_conf.lfs = lfs_ram;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
 }
 
 static void test_setup() {
     setup_fat();
     setup_spiffs();
-    setup_littlefs();
+    setup_littlefs_flash();
+    setup_littlefs_ram();
     printf("Test setup complete.\n");
 }
 
 static void test_teardown()
 {
     assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
+    TEST_ESP_OK(esp_littlefs_vfs_unmount(lfs_flash));
+    TEST_ESP_OK(esp_littlefs_flash_delete(&lfs_flash));
+    TEST_ESP_OK(esp_littlefs_vfs_unmount(lfs_ram));
+    TEST_ESP_OK(esp_littlefs_ram_delete(&lfs_ram));
     TEST_ESP_OK(esp_vfs_spiffs_unregister("spiffs_store"));
-    TEST_ESP_OK(esp_vfs_littlefs_unregister("flash_test"));
     printf("Test teardown complete.\n");
 }
 
@@ -115,7 +135,7 @@ static void fill_partitions()
     for(uint32_t i=0; i < part->size; i += sizeof(dummy_data))
         esp_partition_write(part, i, dummy_data, sizeof(dummy_data));
 
-    ESP_LOGI(TAG, "Filling LittleFS partition with dummy data");
+    ESP_LOGI(TAG, "Filling LittleFS flash partition with dummy data");
     part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
             "flash_test");
     esp_partition_erase_range(part, 0, part->size);
@@ -224,7 +244,8 @@ static void read_write_test_1(const char *mount_pt, uint32_t iter) {
 }
 
 
-TEST_CASE("Format", TAG){
+TEST_CASE("Format", TAG) {
+    ESP_LOGE(TAG, "This test is broken");
     uint64_t t_fat, t_spiffs, t_littlefs, t_start;
 
     fill_partitions();
@@ -236,14 +257,19 @@ TEST_CASE("Format", TAG){
 
     t_start = esp_timer_get_time();
     setup_fat();
-    assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
+    TEST_ESP_OK(esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
     t_fat = esp_timer_get_time() - t_start;
     printf("FAT Formatted in %lld us\n", t_fat);
 
     t_start = esp_timer_get_time();
-    esp_littlefs_format("flash_test");
+    lfs_format(lfs_ram, lfs_ram->cfg);
     t_littlefs = esp_timer_get_time() - t_start;
-    printf("LittleFS Formatted in %lld us\n", t_littlefs);
+    printf("LittleFS ram Formatted in %lld us\n", t_littlefs);
+
+    t_start = esp_timer_get_time();
+    lfs_format(lfs_flash, lfs_flash->cfg);
+    t_littlefs = esp_timer_get_time() - t_start;
+    printf("LittleFS flash Formatted in %lld us\n", t_littlefs);
 
 }
 
@@ -258,8 +284,12 @@ TEST_CASE("Write 5 files, read 5 files, then delete 5 files", TAG){
     read_write_test_1("/spiffs", 5);
     printf("\n");
 
-    printf("LittleFS:\n");
-    read_write_test_1("/littlefs", 5);
+    // printf("LittleFS ram:\n");
+    // read_write_test_1("/littlefs_ram", 5);
+    // printf("\n");
+
+    printf("LittleFS flash:\n");
+    read_write_test_1("/littlefs_flash", 5);
     printf("\n");
 
     test_teardown();

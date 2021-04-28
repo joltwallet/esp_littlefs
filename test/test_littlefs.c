@@ -1,6 +1,8 @@
 //#define LOG_LOCAL_LEVEL 4
 
-#include "esp_littlefs.h"
+#include "esp_littlefs_vfs.h"
+#include "esp_littlefs_abs.h"
+#include "esp_littlefs_flash.h"
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -14,7 +16,6 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_vfs.h"
-#include "esp_littlefs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -36,8 +37,12 @@ static void test_littlefs_read_file(const char* filename);
 static void test_littlefs_readdir_many_files(const char* dir_prefix);
 static void test_littlefs_open_max_files(const char* filename_prefix, size_t files_count);
 static void test_littlefs_concurrent_rw(const char* filename_prefix);
+static void setup_lfs_flash();
+static void teardown_lfs_flash();
 static void test_setup();
 static void test_teardown();
+
+static lfs_t * lfs_flash = NULL;
 
 TEST_CASE("can initialize LittleFS in erased partition", "[littlefs]")
 {
@@ -47,7 +52,7 @@ TEST_CASE("can initialize LittleFS in erased partition", "[littlefs]")
     TEST_ESP_OK(esp_partition_erase_range(part, 0, part->size));
     test_setup();
     size_t total = 0, used = 0;
-    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+    TEST_ESP_OK(esp_littlefs_abs_info(lfs_flash, &total, &used));
     printf("total: %d, used: %d\n", total, used);
     TEST_ASSERT_EQUAL(8192, used); // 2 blocks are used on a fresh filesystem
     test_teardown();
@@ -62,7 +67,7 @@ TEST_CASE("can format mounted partition", "[littlefs]")
     const char* filename = littlefs_base_path "/hello.txt";
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     printf("Deleting \"%s\" via formatting fs.\n", filename);
-    esp_littlefs_format(part->label);
+    esp_littlefs_flash_erase(part->label);
     FILE* f = fopen(filename, "r");
     TEST_ASSERT_NULL(f);
     test_teardown();
@@ -80,18 +85,12 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     test_littlefs_create_file_with_text(filename, littlefs_test_hello_str);
     test_teardown();
 
-    esp_littlefs_format(part->label);
+    esp_littlefs_flash_erase(part->label);
     // Don't use test_setup here, need to mount without formatting
-    const esp_vfs_littlefs_conf_t conf = {
-        .base_path = littlefs_base_path,
-        .partition_label = littlefs_test_partition_label,
-        .format_if_mount_failed = false
-    };
-    TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
-
+    setup_lfs_flash();
     FILE* f = fopen(filename, "r");
     TEST_ASSERT_NULL(f);
-    test_teardown();
+    teardown_lfs_flash();
 }
 
 TEST_CASE("can create and write file", "[littlefs]")
@@ -134,7 +133,7 @@ TEST_CASE("r+ mode read and write file", "[littlefs]")
     test_setup();
 
     test_littlefs_create_file_with_text(fn, "foo");
-    
+
     /* Read back the previously written foo, and add bar*/
     {
         FILE* f = fopen(fn, "r+");
@@ -481,10 +480,10 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
 
     char filename[] = littlefs_base_path "/test_esp_littlefs_info.bin";
     unlink(filename);  /* Delete the file incase it exists */
-    
+
     /* Get starting system size */
     size_t total_og = 0, used_og = 0;
-    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_og, &used_og));
+    TEST_ESP_OK(esp_littlefs_abs_info(lfs_flash, &total_og, &used_og));
 
     /* Write 100,000 bytes */
     FILE* f = fopen(filename, "wb");
@@ -498,7 +497,7 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
 
     /* Re-check system size */
     size_t total_new = 0, used_new = 0;
-    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_new, &used_new));
+    TEST_ESP_OK(esp_littlefs_abs_info(lfs_flash, &total_new, &used_new));
 
     printf("old: %d; new: %d; diff: %d\n", used_og, used_new, used_new-used_og);
 
@@ -623,7 +622,7 @@ static void test_littlefs_write_file_with_offset(const char *filename)
     int written = pwrite(fd, &new_char, 1, offset);
     TEST_ASSERT_EQUAL(1, written);
     TEST_ASSERT_EQUAL(0, close(fd));
-    
+
     char buf[len];
 
     // Compare if both are equal
@@ -981,7 +980,7 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
     test_setup();
 
     size_t total = 0, used = 0;
-    TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+    TEST_ESP_OK(esp_littlefs_abs_info(lfs_flash, &total, &used));
 
     // 2 block overhead
     int kb_to_write = (total - used - (2*4096)) / 1024;
@@ -1001,21 +1000,31 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
     test_teardown();
 }
 
-static void test_setup() {
-    esp_littlefs_format(littlefs_test_partition_label);
-    const esp_vfs_littlefs_conf_t conf = {
-        .base_path = littlefs_base_path,
-        .partition_label = littlefs_test_partition_label,
-        .format_if_mount_failed = true
-    };
-    TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+static void setup_lfs_flash() {
+    esp_littlefs_flash_create_conf_t flash_conf = ESP_LITTLEFS_FLASH_CREATE_CONFIG_DEFAULT();
+    flash_conf.partition_label = littlefs_test_partition_label;
+    TEST_ESP_OK(esp_littlefs_flash_create(&lfs_flash, &flash_conf));
+    esp_littlefs_vfs_mount_conf_t mount_conf = ESP_LITTLEFS_VFS_MOUNT_CONFIG_DEFAULT();
+    mount_conf.mount_point = littlefs_base_path;
+    mount_conf.lfs = lfs_flash;
+    TEST_ESP_OK(esp_littlefs_vfs_mount(&mount_conf));
     TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
+}
+
+static void teardown_lfs_flash() {
+    TEST_ESP_OK(esp_littlefs_vfs_unmount(lfs_flash));
+    TEST_ESP_OK(esp_littlefs_flash_delete(&lfs_flash));
+    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
+}
+
+static void test_setup() {
+    esp_littlefs_flash_erase(littlefs_test_partition_label);
+    setup_lfs_flash();
     printf("Test setup complete.\n");
 }
 
 static void test_teardown(){
-    TEST_ESP_OK(esp_vfs_littlefs_unregister(littlefs_test_partition_label));
-    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
+    teardown_lfs_flash();
     printf("Test teardown complete.\n");
 }
 
