@@ -12,7 +12,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <unistd.h>
-#include <dirent.h>
+#include <sys/dirent.h>
 #include <sys/errno.h>
 #include <sys/fcntl.h>
 #include <sys/lock.h>
