@@ -8,14 +8,23 @@ because SPIFFS was too slow, and FAT was too fragile.
 
 # How to Use
 
-In your project, add this as a submodule to your `components/` directory.
+There are two ways to add this component to your project
+
+1. As a ESP-IDF managed component: In your project directory run
+
+```
+idf.py add-dependency joltwallet/LittleFS==x.y.z
+```
+Where `x.y.z` is required version of this component, or:
+
+2. As a submodule: In your project, add this as a submodule to your `components/` directory.
 
 ```
 git submodule add https://github.com/joltwallet/esp_littlefs.git
 git submodule update --init --recursive
 ```
 
-The library can be configured via `make menuconfig` under `Component config->LittleFS`.
+The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
 ### Example
 User @wreyford has kindly provided a demo repo showing the use of `esp_littlefs`:
@@ -23,7 +32,7 @@ https://github.com/wreyford/demo_esp_littlefs
 
 # Documentation
 
-See the official ESP-IDF SPIFFS documentation, basically all the functionality is the 
+See the official [ESP-IDF SPIFFS documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/spiffs.html), basically all the functionality is the 
 same; just replace `spiffs` with `littlefs` in all function calls.
 
 Also see the comments in `include/esp_littlefs.h`
