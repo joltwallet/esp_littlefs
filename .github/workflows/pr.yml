@@ -17,6 +17,7 @@ jobs:
       with:
         submodules: 'recursive'
     - name: esp-idf build
-      uses: espressif/esp-idf-ci-action@latest
+      uses: BrianPugh/esp-idf-ci-action@latest
       with:
         path: '.'
+        action: 'make tests-build -j8'
