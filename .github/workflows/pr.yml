@@ -1,0 +1,23 @@
+name: Build firmware
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+    - name: esp-idf build
+      uses: BrianPugh/esp-idf-ci-action@latest
+      with:
+        path: '.'
+        action: 'make -j8 tests-build'
