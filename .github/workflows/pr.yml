@@ -20,4 +20,4 @@ jobs:
       uses: BrianPugh/esp-idf-ci-action@latest
       with:
         path: '.'
-        action: 'make tests-build -j8'
+        action: 'make -j8 tests-build'
