@@ -26,8 +26,8 @@ git submodule update --init --recursive
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
 ### Example
-User @wreyford has kindly provided a demo repo showing the use of `esp_littlefs`:
-https://github.com/wreyford/demo_esp_littlefs
+User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
+
 
 # Documentation
 
@@ -39,8 +39,33 @@ Also see the comments in `include/esp_littlefs.h`
 Slight differences between this configuration and SPIFFS's configuration is in the `esp_vfs_littlefs_conf_t`:
 
 1. `max_files` field doesn't exist since we removed the file limit, thanks to @X-Ryl669
-
 2. `partition_label` is not allowed to be `NULL`. You must specify the partition name from your partition table. This is because there isn't a define `littlefs` partition subtype in `esp-idf`. The subtype doesn't matter.
+
+### Filesystem Image Creation
+
+At compile time, a filesystem image can be created and flashed to the device by adding the following to your project's `CMakeLists.txt` file:
+
+```
+littlefs_create_partition_image(partition_name path_to_folder_containing_files)
+```
+
+For example, if your partition table looks like:
+
+```
+# Name,   Type, SubType,  Offset,  Size, Flags
+nvs,      data, nvs,      0x9000,  0x6000,
+phy_init, data, phy,      0xf000,  0x1000,
+factory,  app,  factory,  0x10000, 1M,
+graphics,  data, spiffs,         ,  0xF0000, 
+```
+
+and your project has a folder called `device_graphics`, your call should be:
+
+```
+littlefs_create_partition_image(graphics device_graphics)
+```
+
+
 
 # Performance
 
