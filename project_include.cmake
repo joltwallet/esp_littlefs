@@ -3,30 +3,26 @@
 #
 # Create a littlefs image of the specified directory on the host during build and optionally
 # have the created image flashed using `idf.py flash`
+set(MKLITTLEFS_DIR "${CMAKE_CURRENT_LIST_DIR}/mklittlefs")
+set(MKLITTLEFS "${MKLITTLEFS_DIR}/mklittlefs")
 
 function(littlefs_create_partition_image partition base_dir)
-    set(options FLASH_IN_PROJECT)
-    set(multi DEPENDS)
-    cmake_parse_arguments(arg "${options}" "" "${multi}" "${ARGN}")
+	set(options FLASH_IN_PROJECT)
+	set(multi DEPENDS)
+	cmake_parse_arguments(arg "${options}" "" "${multi}" "${ARGN}")
 
-    idf_build_get_property(idf_path IDF_PATH)
+	idf_build_get_property(idf_path IDF_PATH)
 
 	get_filename_component(base_dir_full_path ${base_dir} ABSOLUTE)
 
 	partition_table_get_partition_info(size "--partition-name ${partition}" "size")
 	partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
 
-	set(MKLITTLEFS_DIR "${COMPONENT_DIR}/mklittlefs")
-	set(MKLITTLEFS "${MKLITTLEFS_DIR}/mklittlefs")
-
 	add_custom_command(
 		OUTPUT ${MKLITTLEFS}
 		COMMAND make dist
 		WORKING_DIRECTORY ${MKLITTLEFS_DIR}
 	)
-
-	message(STATUS "size=${size}")
-	message(STATUS "offset=${offset}")
 
 	if("${size}" AND "${offset}")
 		set(image_file ${CMAKE_BINARY_DIR}/${partition}.bin)
@@ -42,17 +38,28 @@ function(littlefs_create_partition_image partition base_dir)
 			ADDITIONAL_MAKE_CLEAN_FILES
 			${image_file})
 
-		idf_component_get_property(main_args esptool_py FLASH_ARGS)
-		idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
-		esptool_py_flash_target(${partition}-flash "${main_args}" "${sub_args}")
-		esptool_py_flash_target_image(${partition}-flash "${partition}" "${offset}" "${image_file}")
+		string(SUBSTRING "${IDF_VER}" 1 -1 IDF_VER_NO_V)
 
-		add_dependencies(${partition}-flash littlefs_${partition}_bin)
+		if(${IDF_VER_NO_V} VERSION_GREATER 4.2)
+			idf_component_get_property(main_args esptool_py FLASH_ARGS)
+			idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
+			esptool_py_flash_target(${partition}-flash "${main_args}" "${sub_args}")
+			esptool_py_flash_target_image(${partition}-flash "${partition}" "${offset}" "${image_file}")
 
-		if(arg_FLASH_IN_PROJECT)
-			esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
-			add_dependencies(flash littlefs_${partition}_bin)
+			add_dependencies(${partition}-flash littlefs_${partition}_bin)
+
+			if(arg_FLASH_IN_PROJECT)
+				esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
+				add_dependencies(flash littlefs_${partition}_bin)
+			endif()
+		elseif(${IDF_VER_NO_V} VERSION_GREATER 4.1)
+			message(FATAL_ERROR "1Unsupported ESP-IDF version ${IDF_VER}")
+		elseif(${IDF_VER_NO_V} VERSION_GREATER 4.0)
+			message(FATAL_ERROR "0Unsupported ESP-IDF version ${IDF_VER}")
+		else()
+			message(FATAL_ERROR "Unsupported ESP-IDF version ${IDF_VER}")
 		endif()
+
 	else()
 		set(message "Failed to create littlefs image for partition '${partition}'. "
 					"Check project configuration if using the correct partition table file."
