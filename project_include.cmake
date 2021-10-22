@@ -40,6 +40,11 @@ function(littlefs_create_partition_image partition base_dir)
 
 		string(SUBSTRING "${IDF_VER}" 1 -1 IDF_VER_NO_V)
 
+		
+		if(${IDF_VER_NO_V} VERSION_LESS 4.1)
+			message(WARNING "Unsupported/unmaintained/deprecated ESP-IDF version ${IDF_VER}")
+		endif()
+
 		if(${IDF_VER_NO_V} VERSION_GREATER 4.2)
 			idf_component_get_property(main_args esptool_py FLASH_ARGS)
 			idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
@@ -52,14 +57,12 @@ function(littlefs_create_partition_image partition base_dir)
 				esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
 				add_dependencies(flash littlefs_${partition}_bin)
 			endif()
-		elseif(${IDF_VER_NO_V} VERSION_GREATER 4.1)
+		else()
 			if(arg_FLASH_IN_PROJECT)
 				esptool_py_flash_project_args("${partition}" "${offset}" "${image_file}" FLASH_IN_PROJECT)
 			else()
 				esptool_py_flash_project_args("${partition}" "${offset}" "${image_file}")
 			endif()
-		else()
-			message(FATAL_ERROR "Unsupported ESP-IDF version ${IDF_VER}")
 		endif()
 
 	else()
