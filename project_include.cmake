@@ -38,9 +38,12 @@ function(littlefs_create_partition_image partition base_dir)
 			ADDITIONAL_MAKE_CLEAN_FILES
 			${image_file})
 
-		string(SUBSTRING "${IDF_VER}" 1 -1 IDF_VER_NO_V)
+		if(IDF_VER MATCHES "^v")
+			string(SUBSTRING "${IDF_VER}" 1 -1 IDF_VER_NO_V)
+		else()
+			string(SUBSTRING "${IDF_VER}" 0 -1 IDF_VER_NO_V)
+		endif()
 
-		
 		if(${IDF_VER_NO_V} VERSION_LESS 4.1)
 			message(WARNING "Unsupported/unmaintained/deprecated ESP-IDF version ${IDF_VER}")
 		endif()
