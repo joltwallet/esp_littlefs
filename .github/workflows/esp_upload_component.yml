@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+        submodules: recursive
       - name: Upload component to component service
         uses: espressif/github-actions/upload_components@master
         with:
