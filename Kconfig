@@ -8,7 +8,7 @@ menu "LittleFS"
             Define maximum number of partitions that can be mounted.
 
     config LITTLEFS_PAGE_SIZE
-        int "SPIFFS logical page size"
+        int "LITTLEFS logical page size"
         default 256
         range 256 1024
         help
