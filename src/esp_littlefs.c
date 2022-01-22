@@ -69,6 +69,8 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
 static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off_t offset);
 static int     vfs_littlefs_close(void* ctx, int fd);
 static off_t   vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode);
+
+#ifdef CONFIG_VFS_SUPPORT_DIR
 static int     vfs_littlefs_stat(void* ctx, const char * path, struct stat * st);
 static int     vfs_littlefs_unlink(void* ctx, const char *path);
 static int     vfs_littlefs_rename(void* ctx, const char *src, const char *dst);
@@ -83,13 +85,16 @@ static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 static int     vfs_littlefs_fsync(void* ctx, int fd);
 static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size );
+#endif
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
+#ifdef CONFIG_VFS_SUPPORT_DIR
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
+#endif
 static int       esp_littlefs_flags_conv(int m);
 #if CONFIG_LITTLEFS_USE_MTIME
 static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
@@ -176,6 +181,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 #else
         .fstat_p     = NULL, /* Not supported */
 #endif
+#ifdef CONFIG_VFS_SUPPORT_DIR
         .stat_p      = &vfs_littlefs_stat,
         .link_p      = NULL, /* Not Supported */
         .unlink_p    = &vfs_littlefs_unlink,
@@ -195,6 +201,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 #else
         .utime_p     = NULL,
 #endif // CONFIG_LITTLEFS_USE_MTIME
+#endif
     };
 
     esp_err_t err = esp_littlefs_init(conf);
@@ -382,6 +389,7 @@ static void esp_littlefs_free(esp_littlefs_t ** efs)
     free(e);
 }
 
+#ifdef CONFIG_VFS_SUPPORT_DIR
 /**
  * @brief Free a vfs_littlefs_dir_t struct.
  */
@@ -390,6 +398,7 @@ static void esp_littlefs_dir_free(vfs_littlefs_dir_t *dir){
     if(dir->path) free(dir->path);
     free(dir);
 }
+#endif
 
 /**
  * Get a mounted littlefs filesystem by label.
@@ -830,6 +839,7 @@ static uint32_t compute_hash(const char * path) {
     return hash;
 }
 
+#ifdef CONFIG_VFS_SUPPORT_DIR
 /**
  * @brief finds an open file descriptor by file name.
  * @param[in,out] efs file system context
@@ -860,6 +870,7 @@ static int esp_littlefs_get_fd_by_name(esp_littlefs_t *efs, const char *path){
     ESP_LOGV(TAG, "Unable to get a find FD for \"%s\"", path);
     return -1;
 }
+#endif
 
 /*** Filesystem Hooks ***/
 
@@ -1195,6 +1206,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     return res;
 }
 
+#ifdef CONFIG_VFS_SUPPORT_DIR
 static int vfs_littlefs_fsync(void* ctx, int fd)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1225,7 +1237,7 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
 
     return res;
 }
-
+#endif
 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
@@ -1265,6 +1277,7 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
 }
 #endif
 
+#ifdef CONFIG_VFS_SUPPORT_DIR
 static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
     assert(path);
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1621,6 +1634,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     vfs_littlefs_close( ctx, fd );
     return res;
 }
+#endif //CONFIG_VFS_SUPPORT_DIR
 
 #if CONFIG_LITTLEFS_USE_MTIME
 /**
