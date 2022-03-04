@@ -973,6 +973,11 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     }
     file = efs->cache[fd];
     res = lfs_file_write(efs->fs, &file->file, data, size);
+#ifdef CONFIG_LITTLEFS_FLUSH_FILE_EVERY_WRITE
+    if(res > 0) {
+        res = vfs_littlefs_fsync(ctx, fd);
+    }
+#endif
     sem_give(efs);
 
     if(res < 0){
