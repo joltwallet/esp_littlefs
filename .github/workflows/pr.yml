@@ -24,6 +24,7 @@ jobs:
     steps:
       - name: Update git
         run: |
+          add-apt-repository -y ppa:git-core/ppa
           apt update
           apt install -y git
       - uses: actions/checkout@v3
