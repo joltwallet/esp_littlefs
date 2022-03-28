@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-20.04
     container: espressif/idf:release-${{ matrix.idf_ver }}
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
           submodules: recursive
       - name: Build for ESP32
@@ -35,15 +35,15 @@ jobs:
           idf.py build
 
   build-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v2
-      with:
-        submodules: 'recursive'
-    - name: esp-idf build
-      uses: BrianPugh/esp-idf-ci-action@latest
-      with:
-        path: '.'
-        action: 'make -j8 tests-build'
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: esp-idf build
+        uses: BrianPugh/esp-idf-ci-action@v4.2.3
+        with:
+          path: "."
+          action: "make -j8 tests-build"
