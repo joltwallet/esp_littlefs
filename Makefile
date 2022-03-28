@@ -16,7 +16,9 @@ tests-build:
 	$(MAKE) \
 		TEST_COMPONENTS='src'
 
-defconfig-tests-build: defconfig tests-build
+defconfig-tests-build: defconfig
+	$(MAKE) \
+		TEST_COMPONENTS='src'
 
 tests:
 	$(MAKE) \
