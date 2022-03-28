@@ -8,3 +8,8 @@ idf_component_register(
     REQUIRES spi_flash
     PRIV_REQUIRES esptool_py
     )
+
+set_source_files_properties(
+    ${SOURCES}
+    PROPERTIES COMPILE_FLAGS "-DLFS_CONFIG=lfs_config.h"
+)
