@@ -52,7 +52,7 @@ jobs:
         with:
           submodules: recursive
       - name: esp-idf build
-        uses: BrianPugh/esp-idf-ci-action
+        uses: BrianPugh/esp-idf-ci-action@main
         with:
           esp_idf_version: v4.2.3
           action: "make defconfig && make -j8 tests-build"
