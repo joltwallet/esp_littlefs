@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Update git
         run: |
+          apt update
+          apt install software-properties-common
           add-apt-repository -y ppa:git-core/ppa
           apt update
           apt install -y git
