@@ -53,4 +53,4 @@ jobs:
         uses: Unit-e/esp-idf-ci-action@add-parameter-action
         with:
           esp_idf_version: v4.2.3
-          action: "make defconfig && make -j8 tests-build"
+          action: "export IDF_PATH=/opt/esp/idf && make defconfig && make -j8 tests-build"
