@@ -9,6 +9,7 @@ on:
 # Based on https://github.com/igrr/libnmea-esp32/blob/main/.github/workflows/build.yml
 jobs:
   build-component:
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +44,7 @@ jobs:
 
   build-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repo
@@ -50,7 +52,7 @@ jobs:
         with:
           submodules: recursive
       - name: esp-idf build
-        uses: Unit-e/esp-idf-ci-action@add-parameter-action
+        uses: BrianPugh/esp-idf-ci-action
         with:
           esp_idf_version: v4.2.3
-          action: "make -j8 defconfig-tests-build"
+          action: "make defconfig && make -j8 tests-build"

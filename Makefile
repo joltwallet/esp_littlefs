@@ -10,13 +10,9 @@ CFLAGS += \
 
 include $(IDF_PATH)/make/project.mk
 
-.PHONY: tests defconfig-tests-build
+.PHONY: tests
 
 tests-build:
-	$(MAKE) \
-		TEST_COMPONENTS='src'
-
-defconfig-tests-build: defconfig
 	$(MAKE) \
 		TEST_COMPONENTS='src'
 
