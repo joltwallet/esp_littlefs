@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     container: espressif/idf:release-${{ matrix.idf_ver }}
     steps:
+      - name: Update git
+        run: |
+          apt update
+          apt install -y git
       - uses: actions/checkout@v3
         with:
           submodules: recursive
