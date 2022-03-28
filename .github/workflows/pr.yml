@@ -25,7 +25,7 @@ jobs:
       - name: Update git
         run: |
           apt update
-          apt install software-properties-common
+          apt install -y software-properties-common
           add-apt-repository -y ppa:git-core/ppa
           apt update
           apt install -y git
