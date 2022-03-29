@@ -153,7 +153,7 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, si
     esp_littlefs_t *efs = NULL;
 
     err = esp_littlefs_by_label(partition_label, &index);
-    if(err != ESP_OK) return false;
+    if(err != ESP_OK) return err;
     efs = _efs[index];
 
     size_t total_bytes_local = efs->cfg.block_size * efs->cfg.block_count;
