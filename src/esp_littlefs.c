@@ -1196,6 +1196,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        errno = EBADF;
         return LFS_ERR_BADF;
     }
     file = efs->cache[fd];
