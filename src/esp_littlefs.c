@@ -6,17 +6,20 @@
 
 //#define LOG_LOCAL_LEVEL 5
 
+#include "esp_littlefs.h"
 #include "esp_log.h"
 #include "esp_spi_flash.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/semphr.h"
-#include <unistd.h>
+#include "freertos/task.h"
+#include "littlefs_api.h"
 #include <sys/dirent.h>
 #include <sys/errno.h>
 #include <sys/fcntl.h>
 #include <sys/lock.h>
 #include <sys/param.h>
+#include <unistd.h>
 
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/spi_flash.h"
@@ -35,11 +38,6 @@
 #else
 #include "rom/spi_flash.h" //IDF 3
 #endif
-
-#include "esp_system.h"
-
-#include "esp_littlefs.h"
-#include "littlefs_api.h"
 
 
 static const char TAG[] = "esp_littlefs";
