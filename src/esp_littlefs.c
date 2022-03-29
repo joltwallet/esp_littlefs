@@ -1212,7 +1212,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         ESP_LOGV(TAG, "Failed to seek FD %d to offset %08x. Error (%d)",
                 fd, (unsigned int)offset, res);
 #endif
-        return res;
+        return -1;
     }
 
     return res;
