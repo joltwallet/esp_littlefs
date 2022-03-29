@@ -162,7 +162,9 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, si
     /* lfs_fs_size may return a size larger than the actual filesystem size.
      * https://github.com/littlefs-project/littlefs/blob/9c7e232086f865cff0bb96fe753deb66431d91fd/lfs.h#L658
      */
+    sem_take(efs);
     if(used_bytes) *used_bytes = MIN(total_bytes_local, efs->cfg.block_size * lfs_fs_size(efs->fs));
+    sem_give(efs);
 
     return ESP_OK;
 }
