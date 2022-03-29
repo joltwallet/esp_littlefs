@@ -214,13 +214,18 @@ TEST_CASE("can lseek", "[littlefs]")
     TEST_ASSERT_EQUAL('8', fgetc(f));
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
     TEST_ASSERT_EQUAL(11, ftell(f));
+    // Appending to end
     TEST_ASSERT_EQUAL(4, fprintf(f, "abc\n"));
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
     TEST_ASSERT_EQUAL(15, ftell(f));
+    // Appending past end of file, creating a "hole"
+    TEST_ASSERT_EQUAL(0, fseek(f, 2, SEEK_END));
+    TEST_ASSERT_EQUAL(4, fprintf(f, "foo\n"));
+
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_SET));
-    char buf[20];
-    TEST_ASSERT_EQUAL(15, fread(buf, 1, sizeof(buf), f));
-    const char ref_buf[] = "0123456789\nabc\n";
+    char buf[32];
+    TEST_ASSERT_EQUAL(21, fread(buf, 1, sizeof(buf), f));
+    const char ref_buf[] = "0123456789\nabc\n\0\0foo\n";
     TEST_ASSERT_EQUAL_INT8_ARRAY(ref_buf, buf, sizeof(ref_buf) - 1);
 
     TEST_ASSERT_EQUAL(0, fclose(f));
