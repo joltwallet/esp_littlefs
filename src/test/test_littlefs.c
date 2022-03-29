@@ -221,15 +221,21 @@ TEST_CASE("can lseek", "[littlefs]")
     // Appending past end of file, creating a "hole"
     TEST_ASSERT_EQUAL(0, fseek(f, 2, SEEK_END));
     TEST_ASSERT_EQUAL(4, fprintf(f, "foo\n"));
-
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_SET));
     char buf[32];
     TEST_ASSERT_EQUAL(21, fread(buf, 1, sizeof(buf), f));
     const char ref_buf[] = "0123456789\nabc\n\0\0foo\n";
     TEST_ASSERT_EQUAL_INT8_ARRAY(ref_buf, buf, sizeof(ref_buf) - 1);
 
-    TEST_ASSERT_EQUAL(0, fclose(f));
+    // Error checking
+    // Attempting to seek before the beginning of file should return an error
+    TEST_ASSERT_EQUAL(-1, fseek(f, 100, 100));  // Bad mode
+    TEST_ASSERT_EQUAL(EINVAL, errno);
+    TEST_ASSERT_EQUAL(-1, fseek(f, -1, SEEK_SET)); // Seeking to before start of file
+    TEST_ASSERT_EQUAL(EINVAL, errno);
 
+
+    TEST_ASSERT_EQUAL(0, fclose(f));
     test_teardown();
 }
 
@@ -1034,7 +1040,6 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         char *filename = names[i % 7];
         FILE* f = fopen(filename, "a+b");
         TEST_ASSERT_NOT_NULL(f);
-        char val = 'c';
         size_t n_bytes = 200 + i % 17;
         int amount_written = fwrite(foo, n_bytes, 1, f);
         if(amount_written != 1) {
