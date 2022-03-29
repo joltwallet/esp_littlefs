@@ -1188,6 +1188,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         case SEEK_END: whence = LFS_SEEK_END; break;
         default: 
             ESP_LOGE(TAG, "Invalid mode");
+            errno = EINVAL;
             return -1;
     }
 
