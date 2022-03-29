@@ -1001,6 +1001,51 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
+{
+    // https://github.com/joltwallet/esp_littlefs/issues/66
+    test_setup();
+    const char foo[] = "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo";
+
+    char names[7][64];
+    for (size_t i = 0; i < 7; ++i) {
+        snprintf(names[i], sizeof(names[i]), littlefs_base_path "/%d", i + 1);
+        unlink(names[i]);  // Make sure these files don't exist
+
+        FILE* f = fopen(names[i], "wb");
+        TEST_ASSERT_NOT_NULL(f);
+        char val = 'c';
+        size_t n_bytes = 65432;
+        for(int i=0; i < n_bytes; i++) {
+            TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
+        }
+        fclose(f);
+    }
+
+    bool disk_full = false;
+    int i = 0;
+    printf("meow\n");
+    while(!disk_full){
+        char *filename = names[i % 7];
+        FILE* f = fopen(filename, "a+b");
+        TEST_ASSERT_NOT_NULL(f);
+        char val = 'c';
+        size_t n_bytes = 200 + i % 17;
+        int amount_written = fwrite(foo, n_bytes, 1, f);
+        if(amount_written != 1) {
+            disk_full = true;
+        }
+        fclose(f);
+
+        size_t total = 0, used = 0;
+        TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+        TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
+        //printf("used: %d total: %d\n", used, total);
+        i++;
+    }
+    test_teardown();
+}
+
 static void test_setup() {
     esp_littlefs_format(littlefs_test_partition_label);
     const esp_vfs_littlefs_conf_t conf = {
