@@ -9,6 +9,7 @@ on:
 # Based on https://github.com/igrr/libnmea-esp32/blob/main/.github/workflows/build.yml
 jobs:
   build-component:
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -19,10 +20,17 @@ jobs:
             idf_target: esp32s2
           - idf_ver: "v4.3"
             idf_target: esp32c3
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container: espressif/idf:release-${{ matrix.idf_ver }}
     steps:
-      - uses: actions/checkout@v1
+      - name: Update git
+        run: |
+          apt update
+          apt install -y software-properties-common
+          add-apt-repository -y ppa:git-core/ppa
+          apt update
+          apt install -y git
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Build for ESP32
@@ -36,14 +44,15 @@ jobs:
 
   build-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v2
-      with:
-        submodules: 'recursive'
-    - name: esp-idf build
-      uses: BrianPugh/esp-idf-ci-action@latest
-      with:
-        path: '.'
-        action: 'make -j8 tests-build'
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: esp-idf build
+        uses: BrianPugh/esp-idf-ci-action@main
+        with:
+          esp_idf_version: v4.2.3
+          action: "make defconfig && make -j8 tests-build"
