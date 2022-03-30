@@ -974,13 +974,14 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_file_write(efs->fs, &file->file, data, size);
 #ifdef CONFIG_LITTLEFS_FLUSH_FILE_EVERY_WRITE
     if(res > 0) {
-        res = vfs_littlefs_fsync(ctx, fd);
+        vfs_littlefs_fsync(ctx, fd);
     }
 #endif
     sem_give(efs);
@@ -994,7 +995,7 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
         ESP_LOGV(TAG, "Failed to write FD %d. Error %s (%d)",
                 fd, esp_littlefs_errno(res), res);
 #endif
-        return res;
+        return -1;
     }
 
     return res;
@@ -1005,12 +1006,12 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
     ssize_t res;
     vfs_littlefs_file_t *file = NULL;
 
-
     sem_take(efs);
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_file_read(efs->fs, &file->file, dst, size);
@@ -1025,7 +1026,7 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
         ESP_LOGV(TAG, "Failed to read FD %d. Error %s (%d)",
                 fd, esp_littlefs_errno(res), res);
 #endif
-        return res;
+        return -1;
     }
 
     return res;
@@ -1042,7 +1043,8 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
 
@@ -1067,7 +1069,7 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
     if (res >= (ssize_t)0 && save_res < (off_t)0)
     {
-            res = save_res;
+        res = save_res;
     }
     sem_give(efs);
 
@@ -1099,7 +1101,8 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
 
@@ -1124,7 +1127,7 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     save_res = lfs_file_seek(efs->fs, &file->file, old_offset, SEEK_SET);
     if (res >= (ssize_t)0 && save_res < (off_t)0)
     {
-            res = save_res;
+        res = save_res;
     }
     sem_give(efs);
 
@@ -1155,7 +1158,8 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_file_close(efs->fs, &file->file);
@@ -1169,7 +1173,7 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         ESP_LOGV(TAG, "Failed to close Fd %d. Error %s (%d)",
                 fd, esp_littlefs_errno(res), res);
 #endif
-        return res;
+        return -1;
     }
     esp_littlefs_free_fd(efs, fd);
     sem_give(efs);
@@ -1197,7 +1201,7 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
         errno = EBADF;
-        return LFS_ERR_BADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_file_seek(efs->fs, &file->file, offset, whence);
@@ -1230,7 +1234,8 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_file_sync(efs->fs, &file->file);
@@ -1244,7 +1249,7 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
 #else
         ESP_LOGV(TAG, "Failed to sync file %d. Error %d", fd, res);
 #endif
-        return res;
+        return -1;
     }
 
     return res;
@@ -1265,7 +1270,8 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     if((uint32_t)fd > efs->cache_size) {
         sem_give(efs);
         ESP_LOGE(TAG, "FD must be <%d.", efs->cache_size);
-        return LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     file = efs->cache[fd];
     res = lfs_stat(efs->fs, file->path, &info);
@@ -1274,7 +1280,7 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
         sem_give(efs);
         ESP_LOGV(TAG, "Failed to stat file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
 
 #if CONFIG_LITTLEFS_USE_MTIME  
@@ -1308,7 +1314,7 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
          * if a file exists */
         ESP_LOGV(TAG, "Failed to stat path \"%s\". Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
 #if CONFIG_LITTLEFS_USE_MTIME    
     st->st_mtime = vfs_littlefs_get_mtime(efs, path);
@@ -1333,19 +1339,21 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
         sem_give(efs);
         ESP_LOGV(TAG, fail_str_1 " Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
 
     if(esp_littlefs_get_fd_by_name(efs, path) >= 0) {
         sem_give(efs);
         ESP_LOGE(TAG, fail_str_1 " Has open FD.", path);
+        errno = EBUSY;
         return -1;
     }
 
     if (info.type == LFS_TYPE_DIR) {
         sem_give(efs);
         ESP_LOGV(TAG, "Cannot unlink a directory.");
-        return LFS_ERR_ISDIR;
+        errno = EISDIR;
+        return -1;
     }
 
     res = lfs_remove(efs->fs, path);
@@ -1354,7 +1362,7 @@ static int vfs_littlefs_unlink(void* ctx, const char *path) {
         sem_give(efs);
         ESP_LOGV(TAG, fail_str_1 " Error %s (%d)",
                 path, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
 
 #if CONFIG_LITTLEFS_SPIFFS_COMPAT
@@ -1377,11 +1385,13 @@ static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
     if(esp_littlefs_get_fd_by_name(efs, src) >= 0){
         sem_give(efs);
         ESP_LOGE(TAG, "Cannot rename; src \"%s\" is open.", src);
+        errno = EBUSY;
         return -1;
     }
     else if(esp_littlefs_get_fd_by_name(efs, dst) >= 0){
         sem_give(efs);
         ESP_LOGE(TAG, "Cannot rename; dst \"%s\" is open.", dst);
+        errno = EBUSY;
         return -1;
     }
 
@@ -1391,7 +1401,7 @@ static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to rename \"%s\" -> \"%s\". Error %s (%d)",
                 src, dst, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
 
     return 0;
@@ -1405,11 +1415,13 @@ static DIR* vfs_littlefs_opendir(void* ctx, const char* name) {
     dir = calloc(1, sizeof(vfs_littlefs_dir_t));
     if( dir == NULL ) {
         ESP_LOGE(TAG, "dir struct could not be malloced");
+        errno = ENOMEM;
         goto exit;
     }
 
     dir->path = strdup(name);
     if(dir->path == NULL){
+        errno = ENOMEM;
         ESP_LOGE(TAG, "dir path name could not be malloced");
         goto exit;
     }
@@ -1567,7 +1579,7 @@ static int vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to mkdir \"%s\". Error %s (%d)",
                 name, esp_littlefs_errno(res), res);
-        return res;
+        return -1;
     }
     return 0;
 }
@@ -1590,6 +1602,7 @@ static int vfs_littlefs_rmdir(void* ctx, const char* name) {
     if (info.type != LFS_TYPE_DIR) {
         sem_give(efs);
         ESP_LOGV(TAG, "\"%s\" is not a directory.", name);
+        errno = ENOTDIR;
         return -1;
     }
 
@@ -1619,7 +1632,8 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     {
         sem_give(efs);
         ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
-        res = LFS_ERR_BADF;
+        errno = EBADF;
+        return -1;
     }
     else
     {
@@ -1637,6 +1651,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
             ESP_LOGV(TAG, "Failed to truncate FD %d. Error %s (%d)",
                     fd, esp_littlefs_errno(res), res);
     #endif
+            res = -1;
         }
         else
         {
@@ -1660,6 +1675,7 @@ static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path
     if( res < 0 ) {
         errno = -res;
         ESP_LOGV(TAG, "Failed to update mtime (%d)", res);
+        return -1;
     }
 
     return res;
@@ -1705,7 +1721,7 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
 
 static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
 {
-    time_t t = 0;
+    time_t t;
     int size;
     size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
@@ -1717,6 +1733,7 @@ static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
 #else
         ESP_LOGV(TAG, "Failed to get mtime attribute %d", size);
 #endif
+        return -1;
     }
     return t;
 }
