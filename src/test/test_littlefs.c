@@ -364,7 +364,10 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_TRUE(st.st_mode & S_IFDIR);
     TEST_ASSERT_FALSE(st.st_mode & S_IFREG);
     TEST_ASSERT_EQUAL(0, rmdir(name_dir1));
-    TEST_ASSERT_EQUAL(-2, stat(name_dir1, &st));
+
+    // Attempt to stat a removed directory
+    TEST_ASSERT_EQUAL(-1, stat(name_dir1, &st));
+    TEST_ASSERT_EQUAL(ENOENT, errno);
 
     TEST_ASSERT_EQUAL(0, mkdir(name_dir2, 0755));
     test_littlefs_create_file_with_text(name_dir2_file, "foo\n");
@@ -374,7 +377,11 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_EQUAL(0, stat(name_dir2_file, &st));
     TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
     TEST_ASSERT_TRUE(st.st_mode & S_IFREG);
+
+    // Can't remove directory, its not empty
     TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
+    TEST_ASSERT_EQUAL(ENOTEMPTY, errno);
+
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
 #if !CONFIG_LITTLEFS_SPIFFS_COMPAT
     /* this will have already been deleted */
