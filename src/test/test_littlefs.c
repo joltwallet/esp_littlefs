@@ -1042,7 +1042,6 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
 
     bool disk_full = false;
     int i = 0;
-    printf("meow\n");
     while(!disk_full){
         char *filename = names[i % 7];
         FILE* f = fopen(filename, "a+b");
