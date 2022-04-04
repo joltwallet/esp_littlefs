@@ -993,6 +993,8 @@ TEST_CASE("SPIFFS COMPAT: file creation and rename", "[littlefs]")
 {
     test_setup();
 
+    int res;
+    char message[256];
     const char* src = littlefs_base_path "/spiffs_compat/src/foo/bar/spiffs_compat.bin";
     const char* dst = littlefs_base_path "/spiffs_compat/dst/foo/bar/spiffs_compat.bin";
 
@@ -1001,7 +1003,9 @@ TEST_CASE("SPIFFS COMPAT: file creation and rename", "[littlefs]")
     TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
     TEST_ASSERT_EQUAL(0, fclose(f));
 
-    TEST_ASSERT_EQUAL(0, rename(src, dst));
+    res = rename(src, dst);
+    snprintf(message, sizeof(message), "errno: %d", errno);
+    TEST_ASSERT_EQUAL_MESSAGE(0, res, message);
 
     /* check to see if all the directories were deleted */
     struct stat sb;
