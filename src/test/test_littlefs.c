@@ -967,7 +967,7 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
 }
 
 #if CONFIG_LITTLEFS_SPIFFS_COMPAT
-TEST_CASE("SPIFFS COMPAT", "[littlefs]")
+TEST_CASE("SPIFFS COMPAT: file creation and deletion", "[littlefs]")
 {
     test_setup();
 
@@ -988,6 +988,30 @@ TEST_CASE("SPIFFS COMPAT", "[littlefs]")
 
     test_teardown();
 }
+
+TEST_CASE("SPIFFS COMPAT: file creation and rename", "[littlefs]")
+{
+    test_setup();
+
+    const char* src = littlefs_base_path "/spiffs_compat/src/foo/bar/spiffs_compat.bin";
+    const char* dst = littlefs_base_path "/spiffs_compat/dst/foo/bar/spiffs_compat.bin";
+
+    FILE* f = fopen(src, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    TEST_ASSERT_EQUAL(0, rename(src, dst));
+
+    /* check to see if all the directories were deleted */
+    struct stat sb;
+    if (stat(littlefs_base_path "/spiffs_compat/src", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        TEST_FAIL_MESSAGE("Empty directories were not deleted");
+    }
+
+    test_teardown();
+}
+
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
 TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
