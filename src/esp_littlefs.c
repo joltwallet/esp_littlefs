@@ -1415,14 +1415,27 @@ static int vfs_littlefs_rename(void* ctx, const char *src, const char *dst) {
         return -1;
     }
 
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+    /* Create all parent directories to dst (if necessary) */
+    ESP_LOGV(TAG, "LITTLEFS_SPIFFS_COMPAT attempting to create all directories for %s", src);
+    mkdirs(efs, dst);
+#endif
+
     res = lfs_rename(efs->fs, src, dst);
-    sem_give(efs);
     if (res < 0) {
         errno = lfs_errno_remap(res);
+        sem_give(efs);
         ESP_LOGV(TAG, "Failed to rename \"%s\" -> \"%s\". Error %s (%d)",
                 src, dst, esp_littlefs_errno(res), res);
         return -1;
     }
+
+#if CONFIG_LITTLEFS_SPIFFS_COMPAT
+    /* Attempt to delete all parent directories from src that are empty */
+    rmdirs(efs, src);
+#endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
+
+    sem_give(efs);
 
     return 0;
 }
