@@ -44,7 +44,7 @@ void app_main(void)
 
         printf("Now we are starting the LittleFs Demo ...\n");
 
-        ESP_LOGI(TAG, "Initializing LittelFS");
+        ESP_LOGI(TAG, "Initializing LittleFS");
 
         esp_vfs_littlefs_conf_t conf = {
             .base_path = "/littlefs",
