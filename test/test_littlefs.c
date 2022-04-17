@@ -1081,7 +1081,7 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         fclose(f);
 
         size_t total = 0, used = 0;
-        TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+        TEST_ESP_OK(esp_littlefs_abs_info(littlefs_test_partition_label, &total, &used));
         TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
         //printf("used: %d total: %d\n", used, total);
         i++;

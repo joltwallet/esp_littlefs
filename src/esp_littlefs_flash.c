@@ -7,6 +7,24 @@
 #include "esp_partition.h"
 #include "esp_log.h"
 
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP32H2
+#include "esp32h2/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP8684
+#include "esp8684/rom/spi_flash.h"
+#elif __has_include("esp32/rom/spi_flash.h")
+#include "esp32/rom/spi_flash.h" //IDF 4
+#else
+#include "rom/spi_flash.h" //IDF 3
+#endif
+
 static const char *const TAG = ESP_LITTLEFS_FLASH_TAG;
 
 // region little fs hooks
