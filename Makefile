@@ -12,6 +12,10 @@ include $(IDF_PATH)/make/project.mk
 
 .PHONY: tests
 
+tests-build:
+	$(MAKE) \
+		TEST_COMPONENTS='src'
+
 tests:
 	$(MAKE) \
 		TEST_COMPONENTS='src' \

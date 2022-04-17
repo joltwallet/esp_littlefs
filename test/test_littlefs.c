@@ -213,17 +213,28 @@ TEST_CASE("can lseek", "[littlefs]")
     TEST_ASSERT_EQUAL('8', fgetc(f));
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
     TEST_ASSERT_EQUAL(11, ftell(f));
+    // Appending to end
     TEST_ASSERT_EQUAL(4, fprintf(f, "abc\n"));
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_END));
     TEST_ASSERT_EQUAL(15, ftell(f));
+    // Appending past end of file, creating a "hole"
+    TEST_ASSERT_EQUAL(0, fseek(f, 2, SEEK_END));
+    TEST_ASSERT_EQUAL(4, fprintf(f, "foo\n"));
     TEST_ASSERT_EQUAL(0, fseek(f, 0, SEEK_SET));
-    char buf[20];
-    TEST_ASSERT_EQUAL(15, fread(buf, 1, sizeof(buf), f));
-    const char ref_buf[] = "0123456789\nabc\n";
+    char buf[32];
+    TEST_ASSERT_EQUAL(21, fread(buf, 1, sizeof(buf), f));
+    const char ref_buf[] = "0123456789\nabc\n\0\0foo\n";
     TEST_ASSERT_EQUAL_INT8_ARRAY(ref_buf, buf, sizeof(ref_buf) - 1);
 
-    TEST_ASSERT_EQUAL(0, fclose(f));
+    // Error checking
+    // Attempting to seek before the beginning of file should return an error
+    TEST_ASSERT_EQUAL(-1, fseek(f, 100, 100));  // Bad mode
+    TEST_ASSERT_EQUAL(EINVAL, errno);
+    TEST_ASSERT_EQUAL(-1, fseek(f, -1, SEEK_SET)); // Seeking to before start of file
+    TEST_ASSERT_EQUAL(EINVAL, errno);
 
+
+    TEST_ASSERT_EQUAL(0, fclose(f));
     test_teardown();
 }
 
@@ -352,7 +363,10 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_TRUE(st.st_mode & S_IFDIR);
     TEST_ASSERT_FALSE(st.st_mode & S_IFREG);
     TEST_ASSERT_EQUAL(0, rmdir(name_dir1));
-    TEST_ASSERT_EQUAL(-2, stat(name_dir1, &st));
+
+    // Attempt to stat a removed directory
+    TEST_ASSERT_EQUAL(-1, stat(name_dir1, &st));
+    TEST_ASSERT_EQUAL(ENOENT, errno);
 
     TEST_ASSERT_EQUAL(0, mkdir(name_dir2, 0755));
     test_littlefs_create_file_with_text(name_dir2_file, "foo\n");
@@ -362,7 +376,11 @@ TEST_CASE("mkdir, rmdir", "[littlefs]")
     TEST_ASSERT_EQUAL(0, stat(name_dir2_file, &st));
     TEST_ASSERT_FALSE(st.st_mode & S_IFDIR);
     TEST_ASSERT_TRUE(st.st_mode & S_IFREG);
+
+    // Can't remove directory, its not empty
     TEST_ASSERT_EQUAL(-1, rmdir(name_dir2));
+    TEST_ASSERT_EQUAL(ENOTEMPTY, errno);
+
     TEST_ASSERT_EQUAL(0, unlink(name_dir2_file));
 #if !CONFIG_LITTLEFS_SPIFFS_COMPAT
     /* this will have already been deleted */
@@ -948,7 +966,7 @@ static void test_littlefs_concurrent_rw(const char* filename_prefix)
 }
 
 #if CONFIG_LITTLEFS_SPIFFS_COMPAT
-TEST_CASE("SPIFFS COMPAT", "[littlefs]")
+TEST_CASE("SPIFFS COMPAT: file creation and deletion", "[littlefs]")
 {
     test_setup();
 
@@ -969,6 +987,34 @@ TEST_CASE("SPIFFS COMPAT", "[littlefs]")
 
     test_teardown();
 }
+
+TEST_CASE("SPIFFS COMPAT: file creation and rename", "[littlefs]")
+{
+    test_setup();
+
+    int res;
+    char message[256];
+    const char* src = littlefs_base_path "/spiffs_compat/src/foo/bar/spiffs_compat.bin";
+    const char* dst = littlefs_base_path "/spiffs_compat/dst/foo/bar/spiffs_compat.bin";
+
+    FILE* f = fopen(src, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_TRUE(fputs("bar", f) != EOF);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    res = rename(src, dst);
+    snprintf(message, sizeof(message), "errno: %d", errno);
+    TEST_ASSERT_EQUAL_MESSAGE(0, res, message);
+
+    /* check to see if all the directories were deleted */
+    struct stat sb;
+    if (stat(littlefs_base_path "/spiffs_compat/src", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        TEST_FAIL_MESSAGE("Empty directories were not deleted");
+    }
+
+    test_teardown();
+}
+
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
 TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
@@ -996,6 +1042,49 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
             TEST_ASSERT_EQUAL_INT(1024, fwrite(buf, 1, 1024, f));
         }
         fclose(f);
+    }
+    test_teardown();
+}
+
+TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
+{
+    // https://github.com/joltwallet/esp_littlefs/issues/66
+    test_setup();
+    const char foo[] = "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo";
+
+    char names[7][64];
+    for (size_t i = 0; i < 7; ++i) {
+        snprintf(names[i], sizeof(names[i]), littlefs_base_path "/%d", i + 1);
+        unlink(names[i]);  // Make sure these files don't exist
+
+        FILE* f = fopen(names[i], "wb");
+        TEST_ASSERT_NOT_NULL(f);
+        char val = 'c';
+        size_t n_bytes = 65432;
+        for(int i=0; i < n_bytes; i++) {
+            TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
+        }
+        fclose(f);
+    }
+
+    bool disk_full = false;
+    int i = 0;
+    while(!disk_full){
+        char *filename = names[i % 7];
+        FILE* f = fopen(filename, "a+b");
+        TEST_ASSERT_NOT_NULL(f);
+        size_t n_bytes = 200 + i % 17;
+        int amount_written = fwrite(foo, n_bytes, 1, f);
+        if(amount_written != 1) {
+            disk_full = true;
+        }
+        fclose(f);
+
+        size_t total = 0, used = 0;
+        TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
+        TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
+        //printf("used: %d total: %d\n", used, total);
+        i++;
     }
     test_teardown();
 }

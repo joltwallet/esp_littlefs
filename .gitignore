@@ -1,4 +1,10 @@
 build/
 sdkconfig
 sdkconfig.old
-test/cmake-build-debug
+**/cmake-build-debug
+
+example/build/
+example/sdkconfig
+example/sdkconfig.old
+
+*.DS_Store

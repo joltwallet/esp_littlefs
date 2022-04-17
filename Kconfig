@@ -1,5 +1,4 @@
 menu "LittleFS"
-
     config LITTLEFS_OBJ_NAME_LEN
         int "Maximum object name length including NULL terminator."
         default 64
@@ -80,5 +79,14 @@ menu "LittleFS"
             instead of throwing an error. Similarly, upon the deletion of the
             last file in a folder, the folder will be deleted. It is recommended
             to only enable this flag as a stop-gap solution.
+
+    config LITTLEFS_FLUSH_FILE_EVERY_WRITE
+        bool "Flush file to flash after each write operation"
+        default "n"
+        help
+            Enabling this feature extends SPIFFS capability.
+            In SPIFFS data is written immediately to the flash storage when fflush() function called.
+            In LittleFS flush() does not write data to the flash, and fsync() call needed after.
+            With this feature fflush() will write data to the storage.
 
 endmenu
