@@ -25,7 +25,7 @@ menu "LittleFS"
         range 16 1024
         help
             Includes NULL-terminator.
-            If using mklittlefs, make sure to change the default LFS_NAME_MAX=32i
+            If using mklittlefs, make sure to change the default LFS_NAME_MAX=32
             when compiling mklittlefs. If downloading a pre-built release of
             mklittlefs, it was most-likely built with LFS_NAME_MAX=32.
 
