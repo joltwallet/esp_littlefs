@@ -20,7 +20,7 @@ function(littlefs_create_partition_image partition base_dir)
 
 	add_custom_command(
 		OUTPUT ${MKLITTLEFS}
-		COMMAND make dist
+		COMMAND make dist CPPFLAGS="-DLFS_NAME_MAX=${CONFIG_LITTLEFS_OBJ_NAME_LEN}"
 		WORKING_DIRECTORY ${MKLITTLEFS_DIR}
 	)
 
