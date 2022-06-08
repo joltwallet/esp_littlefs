@@ -18,3 +18,7 @@ set_source_files_properties(
     ${SOURCES}
     PROPERTIES COMPILE_FLAGS "-DLFS_CONFIG=lfs_config.h"
 )
+
+if(CONFIG_LITTLEFS_FCNTL_GET_PATH)
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DF_GETPATH=${CONFIG_LITTLEFS_FCNTL_F_GETPATH_VALUE})
+endif()

@@ -10,6 +10,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/unistd.h>
+#include <sys/param.h>
 #include "unity.h"
 #include "test_utils.h"
 #include "esp_log.h"
@@ -1155,10 +1156,79 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
     test_teardown();
 }
 
+#if CONFIG_LITTLEFS_OPEN_DIR
+TEST_CASE("open with flag O_DIRECTORY", "[littlefs]")
+{
+    int fd;
+    int ret;
+    struct stat stat;
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    char path[MAXPATHLEN];
+#endif
+
+    test_setup();
+
+    fd = open("/littlefs/dir1/", O_DIRECTORY | O_NOFOLLOW);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/dir1/", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = fstat(fd, &stat);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_NOT_EQUAL(0, stat.st_size);
+    TEST_ASSERT_EQUAL(S_IFDIR, stat.st_mode);
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    fd = open("/littlefs/dir1/dir2/", O_DIRECTORY | O_NOFOLLOW);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/dir1/dir2/", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = fstat(fd, &stat);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_NOT_EQUAL(0, stat.st_size);
+    TEST_ASSERT_EQUAL(S_IFDIR, stat.st_mode);
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    fd = open("/littlefs/dir1/dir2/test.txt", O_CREAT | O_RDWR);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/dir1/dir2/test.txt", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = fstat(fd, &stat);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(0, stat.st_size);
+    TEST_ASSERT_EQUAL(S_IFREG, stat.st_mode);
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    /* File is created in previous step */
+    fd = open("/littlefs/dir1/dir2/test.txt", O_DIRECTORY | O_NOFOLLOW);
+    TEST_ASSERT_EQUAL(-1, fd);
+    TEST_ASSERT_EQUAL(ENOTDIR, errno);
+
+    test_teardown();
+}
+#endif
+
 TEST_CASE("fcntl get flags", "[littlefs]")
 {
     int fd;
     int ret;
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    char path[MAXPATHLEN];
+#endif
 
     test_setup();
 
@@ -1166,19 +1236,40 @@ TEST_CASE("fcntl get flags", "[littlefs]")
     TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
     ret = fcntl(fd, F_GETFL);
     TEST_ASSERT_EQUAL(O_WRONLY, ret);
-    close(fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/test.txt", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
 
     fd = open("/littlefs/test.txt", O_RDONLY);
     TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
     ret = fcntl(fd, F_GETFL);
     TEST_ASSERT_EQUAL(O_RDONLY, ret);
-    close(fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/test.txt", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
 
     fd = open("/littlefs/test.txt", O_RDWR);
     TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
     ret = fcntl(fd, F_GETFL);
     TEST_ASSERT_EQUAL(O_RDWR, ret);
-    close(fd);
+#if CONFIG_LITTLEFS_FCNTL_GET_PATH
+    ret = fcntl(fd, F_GETPATH, path);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_STRING("/littlefs/test.txt", path);
+    memset(path, 0, MAXPATHLEN);
+#endif
+    ret = close(fd);
+    TEST_ASSERT_EQUAL(0, ret);
 
     test_teardown();
 }

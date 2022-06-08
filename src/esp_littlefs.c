@@ -928,6 +928,10 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     size_t path_len = strlen(path) + 1;  // include NULL terminator
 #endif
+#if CONFIG_LITTLEFS_OPEN_DIR
+    struct lfs_info info;
+#endif
+
     assert(path);
 
     ESP_LOGV(ESP_LITTLEFS_TAG, "Opening %s", path);
@@ -937,6 +941,22 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
     /* Get a FD */
     sem_take(efs);
+
+#if CONFIG_LITTLEFS_OPEN_DIR
+    /* Check if it is a file with same path */
+    if (flags & O_DIRECTORY) {
+        res = lfs_stat(efs->fs, path, &info);
+        if (res == LFS_ERR_OK) {
+            if (info.type == LFS_TYPE_REG) {
+                sem_give(efs);
+                ESP_LOGV(ESP_LITTLEFS_TAG, "Open directory but it is a file");
+                errno = ENOTDIR;
+                return LFS_ERR_INVAL;
+            }
+        }
+    }
+#endif
+
     fd = esp_littlefs_allocate_fd(efs, &file
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     , path_len
@@ -959,6 +979,13 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     /* Open File */
     res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
 
+#if CONFIG_LITTLEFS_OPEN_DIR
+    if ( flags & O_DIRECTORY && res ==  LFS_ERR_ISDIR) {
+        res = LFS_ERR_OK;
+        file->file.flags = flags;
+    }
+#endif
+
     if( res < 0 ) {
         errno = lfs_errno_remap(res);
         esp_littlefs_free_fd(efs, fd);
@@ -978,6 +1005,9 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
      * See TEST_CASE:
      *     "Rewriting file frees space immediately (#7426)"
      */
+#if CONFIG_LITTLEFS_OPEN_DIR
+    if ( (flags & O_DIRECTORY) == 0 ) {
+#endif
     res = lfs_file_sync(efs->fs, &file->file);
     if(res < 0){
         errno = lfs_errno_remap(res);
@@ -988,6 +1018,10 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
         ESP_LOGV(ESP_LITTLEFS_TAG, "Failed to sync at opening file %d. Error %d", fd, res);
 #endif
     }
+
+#if CONFIG_LITTLEFS_OPEN_DIR
+    }
+#endif
 
     file->hash = compute_hash(path);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1202,7 +1236,12 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         errno = EBADF;
         return -1;
     }
+
     file = efs->cache[fd];
+
+#if CONFIG_LITTLEFS_OPEN_DIR
+    if ((file->file.flags & O_DIRECTORY) == 0) {
+#endif
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
         errno = lfs_errno_remap(res);
@@ -1216,6 +1255,12 @@ static int vfs_littlefs_close(void* ctx, int fd) {
 #endif
         return -1;
     }
+#if CONFIG_LITTLEFS_OPEN_DIR
+    } else {
+        res = 0;
+    }
+#endif
+
     esp_littlefs_free_fd(efs, fd);
     sem_give(efs);
     return res;
@@ -1891,7 +1936,8 @@ static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg)
 {
     int result = 0;
     esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
-    lfs_file_t *file = NULL;
+    lfs_file_t *lfs_file = NULL;
+    vfs_littlefs_file_t *file = NULL;
     const uint32_t flags_mask = LFS_O_WRONLY | LFS_O_RDONLY | LFS_O_RDWR;
 
     sem_take(efs);
@@ -1902,8 +1948,9 @@ static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg)
         return -1;
     }
 
-    if (efs->cache[fd]) {
-        file = &efs->cache[fd]->file;
+    file = efs->cache[fd];
+    if (file) {
+        lfs_file = &efs->cache[fd]->file;
     } else {
         sem_give(efs);
         errno = EBADF;
@@ -1911,14 +1958,29 @@ static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg)
     }
 
     if (cmd == F_GETFL) {
-        if ((file->flags & flags_mask) == LFS_O_WRONLY) {
+        if ((lfs_file->flags & flags_mask) == LFS_O_WRONLY) {
             result = O_WRONLY;
-        } else if ((file->flags & flags_mask) == LFS_O_RDONLY) {
+        } else if ((lfs_file->flags & flags_mask) == LFS_O_RDONLY) {
             result = O_RDONLY;
-        } else if ((file->flags & flags_mask) == LFS_O_RDWR) {
+        } else if ((lfs_file->flags & flags_mask) == LFS_O_RDWR) {
             result = O_RDWR;
         }
-    } else {
+    }
+#ifdef CONFIG_LITTLEFS_FCNTL_GET_PATH
+    else if (cmd == F_GETPATH) {
+        char *buffer = (char *)(uintptr_t)arg;
+
+        assert(buffer);
+
+        if (snprintf(buffer, MAXPATHLEN, "%s%s", efs->base_path, file->path) > 0) {
+            result = 0;
+        } else {
+            result = -1;
+            errno = EINVAL;
+        }
+    }
+#endif
+    else {
         result = -1;
         errno = ENOSYS;
     }
