@@ -147,4 +147,32 @@ menu "LittleFS"
             In LittleFS flush() does not write data to the flash, and fsync() call needed after.
             With this feature fflush() will write data to the storage.
 
+    config LITTLEFS_OPEN_DIR
+        bool "Support opening directory"
+        default "n"
+        depends on !LITTLEFS_USE_ONLY_HASH && LITTLEFS_SPIFFS_COMPAT
+        help
+            Support opening directory by following APIs:
+
+                int fd = open("my_directory", O_DIRECTORY);
+
+    config LITTLEFS_FCNTL_GET_PATH
+        bool "Support get file or directory path"
+        default "n"
+        depends on !LITTLEFS_USE_ONLY_HASH
+        help
+            Support getting directory by following APIs:
+
+                char buffer[MAXPATHLEN];
+
+                int fd = open("my_file", flags);
+                fcntl(fd, F_GETPATH, buffer);
+
+    config LITTLEFS_FCNTL_F_GETPATH_VALUE
+        int "Value of command F_GETPATH"
+        default 20
+        depends on LITTLEFS_FCNTL_GET_PATH
+        help
+            ESP-IDF's header file "fcntl.h" doesn't support macro "F_GETPATH",
+            so we should define this macro here.
 endmenu
