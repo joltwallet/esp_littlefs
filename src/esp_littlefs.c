@@ -122,6 +122,8 @@ static void mkdirs(esp_littlefs_t * efs, const char *dir);
 static void rmdirs(esp_littlefs_t * efs, const char *dir);
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
+static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg);
+
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
 
@@ -211,6 +213,7 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .pread_p     = &vfs_littlefs_pread,
         .open_p      = &vfs_littlefs_open,
         .close_p     = &vfs_littlefs_close,
+        .fcntl_p     = &vfs_littlefs_fcntl,
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         .fstat_p     = &vfs_littlefs_fstat,
 #else
@@ -1832,3 +1835,44 @@ static void rmdirs(esp_littlefs_t * efs, const char *dir) {
 }
 
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
+
+static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg)
+{
+    int result = 0;
+    esp_littlefs_t *efs = (esp_littlefs_t *)ctx;
+    lfs_file_t *file = NULL;
+    const uint32_t flags_mask = LFS_O_WRONLY | LFS_O_RDONLY | LFS_O_RDWR;
+
+    sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        errno = EBADF;
+        return -1;
+    }
+
+    if (efs->cache[fd]) {
+        file = &efs->cache[fd]->file;
+    } else {
+        sem_give(efs);
+        errno = EBADF;
+        return -1;
+    }
+
+    if (cmd == F_GETFL) {
+        if ((file->flags & flags_mask) == LFS_O_WRONLY) {
+            result = O_WRONLY;
+        } else if ((file->flags & flags_mask) == LFS_O_RDONLY) {
+            result = O_RDONLY;
+        } else if ((file->flags & flags_mask) == LFS_O_RDWR) {
+            result = O_RDWR;
+        }
+    } else {
+        result = -1;
+        errno = ENOSYS;
+    }
+
+    sem_give(efs);
+
+    return result;
+}
