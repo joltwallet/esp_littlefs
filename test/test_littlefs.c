@@ -1101,6 +1101,34 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("fcntl get flags", "[littlefs]")
+{
+    int fd;
+    int ret;
+
+    test_setup();
+
+    fd = open("/littlefs/test.txt", O_CREAT | O_WRONLY);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+    ret = fcntl(fd, F_GETFL);
+    TEST_ASSERT_EQUAL(O_WRONLY, ret);
+    close(fd);
+
+    fd = open("/littlefs/test.txt", O_RDONLY);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+    ret = fcntl(fd, F_GETFL);
+    TEST_ASSERT_EQUAL(O_RDONLY, ret);
+    close(fd);
+
+    fd = open("/littlefs/test.txt", O_RDWR);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(0, fd);
+    ret = fcntl(fd, F_GETFL);
+    TEST_ASSERT_EQUAL(O_RDWR, ret);
+    close(fd);
+
+    test_teardown();
+}
+
 static void test_setup() {
     esp_littlefs_format(littlefs_test_partition_label);
     const esp_vfs_littlefs_conf_t conf = {
