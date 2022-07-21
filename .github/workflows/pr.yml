@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
     branches:
-      - main
+      - master
 
 # Based on https://github.com/igrr/libnmea-esp32/blob/main/.github/workflows/build.yml
 jobs:
