@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - master
+  schedule:
+    - cron: "0 1 * * 6" # Every Saturday at 1AM
 
 # Based on https://github.com/igrr/libnmea-esp32/blob/main/.github/workflows/build.yml
 jobs:
@@ -15,20 +17,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["v4.1", "v4.2", "v4.3"]
+        idf_ver:
+          [
+            "release-v4.1",
+            "release-v4.2",
+            "release-v4.3",
+            "release-v4.4",
+            "latest",
+          ]
         idf_target: ["esp32"]
         include:
-          - idf_ver: "v4.2"
+          - idf_ver: "release-v4.2"
             idf_target: esp32s2
-          - idf_ver: "v4.3"
+          - idf_ver: "release-v4.3"
             idf_target: esp32c3
+          - idf_ver: "release-v4.4"
+            idf_target: esp32s3
     runs-on: ubuntu-latest
-    container: espressif/idf:release-${{ matrix.idf_ver }}
+    container: espressif/idf:${{ matrix.idf_ver }}
     steps:
       - name: Update git
         run: |
+          export DEBIAN_FRONTEND=noninteractive
           apt update
-          apt install -y software-properties-common
+          apt install -y software-properties-common g++
           add-apt-repository -y ppa:git-core/ppa
           apt update
           apt install -y git
