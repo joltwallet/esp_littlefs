@@ -23,6 +23,7 @@
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "spi_flash_mmap.h"
+#define pcTaskGetTaskName pcTaskGetName
 
 #else
 #include "esp_spi_flash.h"
