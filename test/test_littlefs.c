@@ -23,6 +23,11 @@
 #include "esp_partition.h"
 #include "errno.h"
 
+#if __has_include("esp_rom_sys.h")
+#include "esp_rom_sys.h"
+#define ets_printf esp_rom_printf
+#endif
+
 
 static const char littlefs_test_partition_label[] = "flash_test";
 static const char littlefs_test_hello_str[] = "Hello, World!\n";
