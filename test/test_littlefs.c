@@ -22,10 +22,12 @@
 #include "esp_heap_caps.h"
 #include "esp_partition.h"
 #include "errno.h"
+#include "esp_idf_version.h"
 
-#if __has_include("esp_rom_sys.h")
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
+#define esp_rom_printf ets_printf
+#else
 #include "esp_rom_sys.h"
-#define ets_printf esp_rom_printf
 #endif
 
 
@@ -860,7 +862,7 @@ static void read_write_task(void* param)
         if (args->action == CONCURRENT_TASK_ACTION_WRITE) {
             int cnt = fwrite(&val, sizeof(val), 1, f);
             if (cnt != 1) {
-                ets_printf("E(w): i=%d, cnt=%d val=%d\n\n", i, cnt, val);
+                esp_rom_printf("E(w): i=%d, cnt=%d val=%d\n\n", i, cnt, val);
                 args->result = ESP_FAIL;
                 goto close;
             }
@@ -868,7 +870,7 @@ static void read_write_task(void* param)
             uint32_t rval;
             int cnt = fread(&rval, sizeof(rval), 1, f);
             if (cnt != 1) {
-                ets_printf("E(r): i=%d, cnt=%d rval=%d\n\n", i, cnt, rval);
+                esp_rom_printf("E(r): i=%d, cnt=%d rval=%d\n\n", i, cnt, rval);
                 args->result = ESP_FAIL;
                 goto close;
             }
