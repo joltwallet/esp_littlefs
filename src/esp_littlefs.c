@@ -8,7 +8,6 @@
 
 #include "esp_littlefs.h"
 #include "esp_log.h"
-#include "esp_spi_flash.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -20,6 +19,15 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include "esp_idf_version.h"
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#include "spi_flash_mmap.h"
+
+#else
+#include "esp_spi_flash.h"
+
+#endif
 
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/spi_flash.h"
