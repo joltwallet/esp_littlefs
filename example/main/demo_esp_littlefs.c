@@ -16,15 +16,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "esp_idf_version.h"
+#include "esp_flash.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "esp_chip_info.h"
-#include "esp_flash.h"
 #include "spi_flash_mmap.h"
-
-#else
-#include "esp_spi_flash.h"
-
 #endif
 
 
@@ -49,12 +45,7 @@ void app_main(void)
         printf("silicon revision %d, ", chip_info.revision);
 
         uint32_t size_flash_chip = 0;
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
         esp_flash_get_size(NULL, &size_flash_chip);
-#else
-        size_flash_chip = spi_flash_get_chip_size() / (1024 * 1024);
-#endif
-
         printf("%dMB %s flash\n", size_flash_chip,
                (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
