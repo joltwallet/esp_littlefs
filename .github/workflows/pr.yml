@@ -66,7 +66,7 @@ jobs:
         with:
           submodules: recursive
       - name: esp-idf build
-        uses: BrianPugh/esp-idf-ci-action@main
+        uses: espressif/esp-idf-ci-action@main
         with:
-          esp_idf_version: v4.2.3
-          action: "make defconfig && make -j8 tests-build"
+          esp_idf_version: v4.3.2
+          command: '/bin/bash -c " ln -s /app /opt/esp/idf/tools/unit-test-app/components/littlefs; cd /opt/esp/idf/tools/unit-test-app; idf.py -T littlefs build"'
