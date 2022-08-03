@@ -246,6 +246,30 @@ TEST_CASE("can lseek", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("truncate", "[littlefs]")
+{
+    test_setup();
+
+    FILE* f;
+    char buf[10] = { 0 };
+    const char fn[] = littlefs_base_path "/truncate.txt";
+
+    f = fopen(fn, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(11, fprintf(f, "0123456789\n"));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    truncate(fn, 3);
+
+    f = fopen(fn, "r");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(3, fread(buf, 1, 8, f));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT_EQUAL_STRING_LEN("012", buf, 8);
+
+    test_teardown();
+}
+
 
 TEST_CASE("stat/fstat returns correct values", "[littlefs]")
 {
