@@ -270,6 +270,7 @@ TEST_CASE("truncate", "[littlefs]")
     test_teardown();
 }
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 TEST_CASE("ftruncate", "[littlefs]")
 {
     test_setup();
@@ -297,6 +298,7 @@ TEST_CASE("ftruncate", "[littlefs]")
 
     test_teardown();
 }
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 
 
 TEST_CASE("stat/fstat returns correct values", "[littlefs]")
