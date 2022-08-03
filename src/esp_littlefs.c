@@ -92,7 +92,13 @@ static void    vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset);
 static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 static int     vfs_littlefs_fsync(void* ctx, int fd);
-static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size );
+static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size);
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size);
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+
+static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 #endif
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
@@ -100,10 +106,8 @@ static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
-#ifdef CONFIG_VFS_SUPPORT_DIR
-static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
-#endif
 static int       esp_littlefs_flags_conv(int m);
+
 #if CONFIG_LITTLEFS_USE_MTIME
 static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 static void      vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
@@ -216,9 +220,8 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .fcntl_p     = &vfs_littlefs_fcntl,
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         .fstat_p     = &vfs_littlefs_fstat,
-#else
-        .fstat_p     = NULL, /* Not supported */
 #endif
+
 #ifdef CONFIG_VFS_SUPPORT_DIR
         .stat_p      = &vfs_littlefs_stat,
         .link_p      = NULL, /* Not Supported */
@@ -234,12 +237,16 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .rmdir_p     = &vfs_littlefs_rmdir,
         .fsync_p     = &vfs_littlefs_fsync,
 		.truncate_p  = &vfs_littlefs_truncate,
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+        .ftruncate_p = &vfs_littlefs_ftruncate,
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+
 #if CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
-#else
-        .utime_p     = NULL,
 #endif // CONFIG_LITTLEFS_USE_MTIME
-#endif
+       
+#endif // CONFIG_VFS_SUPPORT_DIR
     };
 
     esp_err_t err = esp_littlefs_init(conf);
@@ -1681,32 +1688,69 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
         errno = EBADF;
         return -1;
     }
+    file = efs->cache[fd];
+    res = lfs_file_truncate( efs->fs, &file->file, size );
+    sem_give(efs);
+
+    if(res < 0)
+    {
+        errno = lfs_errno_remap(res);
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to truncate file \"%s\". Error %s (%d)",
+                file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGV(TAG, "Failed to truncate FD %d. Error %s (%d)",
+                fd, esp_littlefs_errno(res), res);
+#endif
+        res = -1;
+    }
     else
     {
-        file = efs->cache[fd];
-        res = lfs_file_truncate( efs->fs, &file->file, size );
-        sem_give(efs);
-
-        if(res < 0)
-        {
-            errno = lfs_errno_remap(res);
-    #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-            ESP_LOGV(TAG, "Failed to truncate file \"%s\". Error %s (%d)",
-                    file->path, esp_littlefs_errno(res), res);
-    #else
-            ESP_LOGV(TAG, "Failed to truncate FD %d. Error %s (%d)",
-                    fd, esp_littlefs_errno(res), res);
-    #endif
-            res = -1;
-        }
-        else
-        {
-            ESP_LOGV( TAG, "Truncated file %s to %u bytes", path, (uint32_t) size );
-        }
+        ESP_LOGV( TAG, "Truncated file %s to %u bytes", path, (uint32_t) size );
     }
     vfs_littlefs_close( ctx, fd );
     return res;
 }
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
+{
+    esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
+    ssize_t res;
+    vfs_littlefs_file_t *file = NULL;
+
+    sem_take(efs);
+    if((uint32_t)fd > efs->cache_size) {
+        sem_give(efs);
+        ESP_LOGE(TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        errno = EBADF;
+        return -1;
+    }
+    file = efs->cache[fd];
+    res = lfs_file_truncate( efs->fs, &file->file, size );
+    sem_give(efs);
+
+    if(res < 0)
+    {
+        errno = lfs_errno_remap(res);
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+        ESP_LOGV(TAG, "Failed to truncate file \"%s\". Error %s (%d)",
+                file->path, esp_littlefs_errno(res), res);
+#else
+        ESP_LOGV(TAG, "Failed to truncate FD %d. Error %s (%d)",
+                fd, esp_littlefs_errno(res), res);
+#endif
+        res = -1;
+    }
+    else
+    {
+        ESP_LOGV( TAG, "Truncated file %s to %u bytes", file->path, (uint32_t) size );
+    }
+    return res;
+
+}
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+
 #endif //CONFIG_VFS_SUPPORT_DIR
 
 #if CONFIG_LITTLEFS_USE_MTIME
