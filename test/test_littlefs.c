@@ -265,7 +265,7 @@ TEST_CASE("stat/fstat returns correct values", "[littlefs]")
             FILE *f = fopen(filename, "r");
             TEST_ASSERT_NOT_NULL(f);
             TEST_ASSERT_EQUAL(0, fstat(fileno(f), &st));
-            fclose(f);
+            TEST_ASSERT_EQUAL(0, fclose(f));
 #endif
         }
         TEST_ASSERT(st.st_mode & S_IFREG);
@@ -519,7 +519,7 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
     for(int i=0; i < n_bytes; i++) {
         TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
     }
-    fclose(f);
+    TEST_ASSERT_EQUAL(0, fclose(f));
 
     /* Re-check system size */
     size_t total_new = 0, used_new = 0;
@@ -567,7 +567,7 @@ TEST_CASE("mtime support", "[littlefs]")
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT(st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
-    fclose(f);
+    TEST_ASSERT_EQUAL(0, fclose(f));
 
     /* Wait a bit, open for reading, check that mtime is not updated */
     vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -578,7 +578,7 @@ TEST_CASE("mtime support", "[littlefs]")
     TEST_ASSERT(t_before_open_ro > t_after_open
              && st.st_mtime >= t_before_open
              && st.st_mtime <= t_after_open);
-    fclose(f);
+    TEST_ASSERT_EQUAL(0, fclose(f));
 
     TEST_ASSERT_EQUAL(0, unlink(filename));
 
@@ -613,7 +613,7 @@ TEST_CASE("mnonce support", "[littlefs]")
     else {
         TEST_ASSERT_EQUAL_INT(1, nonce2-nonce1);
     }
-    fclose(f);
+    TEST_ASSERT_EQUAL(0, fclose(f));
 
     /* open for reading, check that mtime is not updated */
     int nonce3;
@@ -622,7 +622,7 @@ TEST_CASE("mnonce support", "[littlefs]")
     nonce3 = (int) st.st_mtime;
     printf("mtime=%d\n", (int) st.st_mtime);
     TEST_ASSERT_EQUAL_INT(nonce2, nonce3);
-    fclose(f);
+    TEST_ASSERT_EQUAL(0, fclose(f));
 
     TEST_ASSERT_EQUAL(0, unlink(filename));
 
@@ -813,7 +813,7 @@ static void test_littlefs_open_max_files(const char* filename_prefix, size_t fil
     }
     /* close everything and clean up */
     for (size_t i = 0; i < files_count; ++i) {
-        fclose(files[i]);
+        TEST_ASSERT_EQUAL(0, fclose(files[i]));
         TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     }
     free(files);
@@ -887,7 +887,9 @@ static void read_write_task(void* param)
     args->result = ESP_OK;
 
 close:
-    if(f) fclose(f);
+    if(f) {
+        TEST_ASSERT_EQUAL(0, fclose(f));
+    }
 
 done:
     xSemaphoreGive(args->done);
@@ -1049,7 +1051,7 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
         for (size_t i = 0; i < kb_to_write; i++) {
             TEST_ASSERT_EQUAL_INT(1024, fwrite(buf, 1, 1024, f));
         }
-        fclose(f);
+        TEST_ASSERT_EQUAL(0, fclose(f));
     }
     test_teardown();
 }
@@ -1078,7 +1080,7 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         for(int i=0; i < n_bytes; i++) {
             TEST_ASSERT_EQUAL(1, fwrite(&val, 1, 1, f));
         }
-        fclose(f);
+        TEST_ASSERT_EQUAL(0, fclose(f));
     }
 
     bool disk_full = false;
@@ -1092,7 +1094,7 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         if(amount_written != 1) {
             disk_full = true;
         }
-        fclose(f);
+        TEST_ASSERT_EQUAL(0, fclose(f));
 
         size_t total = 0, used = 0;
         TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
