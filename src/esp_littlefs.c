@@ -94,9 +94,9 @@ static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 static int     vfs_littlefs_fsync(void* ctx, int fd);
 static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size);
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size);
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 #endif
@@ -238,9 +238,9 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .fsync_p     = &vfs_littlefs_fsync,
 		.truncate_p  = &vfs_littlefs_truncate,
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
         .ftruncate_p = &vfs_littlefs_ftruncate,
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 
 #if CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
@@ -1712,7 +1712,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     return res;
 }
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1749,7 +1749,7 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
     return res;
 
 }
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 
 #endif //CONFIG_VFS_SUPPORT_DIR
 
