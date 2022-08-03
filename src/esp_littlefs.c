@@ -8,7 +8,6 @@
 
 #include "esp_littlefs.h"
 #include "esp_log.h"
-#include "esp_spi_flash.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -20,6 +19,17 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include "esp_idf_version.h"
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#include "spi_flash_mmap.h"
+#else
+#include "esp_spi_flash.h"
+#endif
+
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
+#define pcTaskGetName pcTaskGetTaskName
+#endif
 
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/spi_flash.h"
@@ -665,11 +675,11 @@ exit:
 static inline int sem_take(esp_littlefs_t *efs) {
     int res;
 #if LOG_LOCAL_LEVEL >= 5
-    ESP_LOGV(TAG, "------------------------ Sem Taking [%s]", pcTaskGetTaskName(NULL));
+    ESP_LOGV(TAG, "------------------------ Sem Taking [%s]", pcTaskGetName(NULL));
 #endif
     res = xSemaphoreTakeRecursive(efs->lock, portMAX_DELAY);
 #if LOG_LOCAL_LEVEL >= 5
-    ESP_LOGV(TAG, "--------------------->>> Sem Taken [%s]", pcTaskGetTaskName(NULL));
+    ESP_LOGV(TAG, "--------------------->>> Sem Taken [%s]", pcTaskGetName(NULL));
 #endif
     return res;
 }
@@ -680,7 +690,7 @@ static inline int sem_take(esp_littlefs_t *efs) {
  */
 static inline int sem_give(esp_littlefs_t *efs) {
 #if LOG_LOCAL_LEVEL >= 5
-    ESP_LOGV(TAG, "---------------------<<< Sem Give [%s]", pcTaskGetTaskName(NULL));
+    ESP_LOGV(TAG, "---------------------<<< Sem Give [%s]", pcTaskGetName(NULL));
 #endif
     return xSemaphoreGiveRecursive(efs->lock);
 }

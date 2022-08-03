@@ -60,13 +60,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    strategy:
+      fail-fast: false
+      matrix:
+        idf_ver: ["v4.2.3", "v4.3.3", "v4.4.1", "latest"]
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: esp-idf build
-        uses: BrianPugh/esp-idf-ci-action@main
+        uses: espressif/esp-idf-ci-action@main
         with:
-          esp_idf_version: v4.2.3
-          action: "make defconfig && make -j8 tests-build"
+          esp_idf_version: ${{ matrix.idf_ver }}
+          command: '/bin/bash -c " ln -s /app /opt/esp/idf/tools/unit-test-app/components/littlefs; cd /opt/esp/idf/tools/unit-test-app; idf.py -T littlefs build"'

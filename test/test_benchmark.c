@@ -11,6 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_partition.h"
+#include "esp_idf_version.h"
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#define esp_vfs_fat_spiflash_mount esp_vfs_fat_spiflash_mount_rw_wl
+#define esp_vfs_fat_spiflash_unmount esp_vfs_fat_spiflash_unmount_rw_wl
+#endif
 
 static const char TAG[] = "[benchmark]";
 
