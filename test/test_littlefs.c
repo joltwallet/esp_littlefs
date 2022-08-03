@@ -1056,12 +1056,6 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
     test_teardown();
 }
 
-#if 0
-/******
- * Skipping this unit test for now, because I don't believe it ever actually triggered the issue.
- * Regardless, mitigation code is in place; we can revisit this test if another error is reported.
- * On ESP-IDF v4.4 this test works fine. However, on ESP-IDF v5.0 it bogs down in the second loop.
- */
 TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
 {
     // https://github.com/joltwallet/esp_littlefs/issues/66
@@ -1094,7 +1088,9 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         if(amount_written != 1) {
             disk_full = true;
         }
-        TEST_ASSERT_EQUAL(0, fclose(f));
+        if(0 != fclose(f)){
+            disk_full = true;
+        }
 
         size_t total = 0, used = 0;
         TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
@@ -1104,7 +1100,6 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
     }
     test_teardown();
 }
-#endif
 
 static void test_setup() {
     esp_littlefs_format(littlefs_test_partition_label);
