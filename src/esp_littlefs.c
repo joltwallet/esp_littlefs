@@ -1787,6 +1787,7 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
 
     assert(path);
 
+    sem_take(efs);
     if (times) {
         t = times->modtime;
     } else {
@@ -1806,6 +1807,7 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
     }
 
     int ret = vfs_littlefs_update_mtime_value(efs, path, t);
+    sem_give(efs);
     return ret;
 }
 
