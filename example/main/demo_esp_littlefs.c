@@ -46,10 +46,10 @@ void app_main(void)
 
         uint32_t size_flash_chip = 0;
         esp_flash_get_size(NULL, &size_flash_chip);
-        printf("%dMB %s flash\n", size_flash_chip,
+        printf("%uMB %s flash\n", (unsigned int)size_flash_chip >> 20,
                (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
-        printf("Free heap: %d\n", esp_get_free_heap_size());
+        printf("Free heap: %u\n", (unsigned int) esp_get_free_heap_size());
 
         printf("Now we are starting the LittleFs Demo ...\n");
 
