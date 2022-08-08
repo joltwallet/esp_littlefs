@@ -573,8 +573,8 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         uint32_t flash_page_size = g_rom_flashchip.page_size;
         uint32_t log_page_size = CONFIG_LITTLEFS_PAGE_SIZE;
         if (log_page_size % flash_page_size != 0) {
-            ESP_LOGE(TAG, "LITTLEFS_PAGE_SIZE is not multiple of flash chip page size (%d)",
-                    flash_page_size);
+            ESP_LOGE(TAG, "LITTLEFS_PAGE_SIZE is not multiple of flash chip page size (%u)",
+                    (unsigned int) flash_page_size);
             err = ESP_ERR_INVALID_ARG;
             goto exit;
         }
@@ -1251,10 +1251,10 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
         errno = lfs_errno_remap(res);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGV(TAG, "Failed to seek file \"%s\" to offset %08x. Error %s (%d)",
-                file->path, (unsigned int)offset, esp_littlefs_errno(res), res);
+                file->path, (unsigned int)offset, esp_littlefs_errno(res), (int) res);
 #else
         ESP_LOGV(TAG, "Failed to seek FD %d to offset %08x. Error (%d)",
-                fd, (unsigned int)offset, res);
+                fd, (unsigned int)offset, (int) res);
 #endif
         return -1;
     }
@@ -1560,8 +1560,8 @@ static int vfs_littlefs_readdir_r(void* ctx, DIR* pdir,
     }
 
     if(info.type == LFS_TYPE_REG) {
-        ESP_LOGV(TAG, "readdir a file of size %d named \"%s\"",
-                info.size, info.name);
+        ESP_LOGV(TAG, "readdir a file of size %u named \"%s\"",
+                (unsigned int) info.size, info.name);
     }
     else {
         ESP_LOGV(TAG, "readdir a dir named \"%s\"", info.name);
@@ -1706,7 +1706,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     }
     else
     {
-        ESP_LOGV( TAG, "Truncated file %s to %u bytes", path, (uint32_t) size );
+        ESP_LOGV( TAG, "Truncated file %s to %u bytes", path, (unsigned int) size );
     }
     vfs_littlefs_close( ctx, fd );
     return res;
@@ -1744,7 +1744,7 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
     }
     else
     {
-        ESP_LOGV( TAG, "Truncated file %s to %u bytes", file->path, (uint32_t) size );
+        ESP_LOGV( TAG, "Truncated file %s to %u bytes", file->path, (unsigned int) size );
     }
     return res;
 
