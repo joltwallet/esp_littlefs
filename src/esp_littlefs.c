@@ -160,7 +160,7 @@ static const char * esp_littlefs_errno(enum lfs_error lfs_errno);
 #endif
 
 
-void esp_littlefs_free_fds(esp_littlefs_t * efs) {
+static void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
     while (efs->file) {
         vfs_littlefs_file_t * next = efs->file->next;
