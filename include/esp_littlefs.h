@@ -10,16 +10,6 @@ extern "C" {
 #endif
 
 /**
- * @brief Last Modified Time
- *
- * Use 't' for LITTLEFS_ATTR_MTIME to match example:
- *     https://github.com/ARMmbed/littlefs/issues/23#issuecomment-482293539
- * And to match other external tools such as:
- *     https://github.com/earlephilhower/mklittlefs
- */
-#define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
-
-/**
  *Configuration structure for esp_vfs_littlefs_register.
  */
 typedef struct {

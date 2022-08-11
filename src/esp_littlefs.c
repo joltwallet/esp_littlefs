@@ -60,6 +60,16 @@ static const char TAG[] = "esp_littlefs";
 #define CONFIG_LITTLEFS_FD_CACHE_HYST 4  /* When shrinking, leave this many trailing FD slots available */
 
 /**
+ * @brief Last Modified Time
+ *
+ * Use 't' for LITTLEFS_ATTR_MTIME to match example:
+ *     https://github.com/ARMmbed/littlefs/issues/23#issuecomment-482293539
+ * And to match other external tools such as:
+ *     https://github.com/earlephilhower/mklittlefs
+ */
+#define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
+
+/**
  * @brief littlefs DIR structure
  */
 typedef struct {
