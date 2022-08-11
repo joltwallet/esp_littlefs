@@ -2,8 +2,7 @@
 #define ESP_LITTLEFS_H__
 
 #include "esp_err.h"
-#include "littlefs/lfs.h"
-#include "sdkconfig.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

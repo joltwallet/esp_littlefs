@@ -1,6 +1,7 @@
 //#define LOG_LOCAL_LEVEL 4
 
 #include "esp_littlefs.h"
+#include "sdkconfig.h"
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -14,7 +15,6 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_vfs.h"
-#include "esp_littlefs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -1200,4 +1200,3 @@ static void test_teardown(){
     TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
     printf("Test teardown complete.\n");
 }
-
