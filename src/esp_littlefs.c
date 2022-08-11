@@ -147,6 +147,17 @@ static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
 /********************
  * Helper Functions *
  ********************/
+
+
+#if CONFIG_LITTLEFS_HUMAN_READABLE
+/**
+ * @brief converts an enumerated lfs error into a string.
+ * @param lfs_errno The enumerated littlefs error.
+ */
+static const char * esp_littlefs_errno(enum lfs_error lfs_errno);
+#endif
+
+
 void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
     while (efs->file) {
@@ -388,12 +399,18 @@ exit:
     return err;
 }
 
+/********************
+ * Static Functions *
+ ********************/
+
+/*** Helpers ***/
+
 #if CONFIG_LITTLEFS_HUMAN_READABLE
 /**
  * @brief converts an enumerated lfs error into a string.
  * @param lfs_error The littlefs error.
  */
-const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
+static const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
     switch(lfs_errno){
         case LFS_ERR_OK: return "LFS_ERR_OK";
         case LFS_ERR_IO: return "LFS_ERR_IO";
@@ -417,12 +434,6 @@ const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
 #else
 #define esp_littlefs_errno(x) ""
 #endif
-
-/********************
- * Static Functions *
- ********************/
-
-/*** Helpers ***/
 
 /**
  * @brief Free and clear a littlefs definition structure.

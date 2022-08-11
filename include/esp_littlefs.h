@@ -78,14 +78,6 @@ esp_err_t esp_littlefs_format(const char* partition_label);
  */
 esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, size_t *used_bytes);
 
-#if CONFIG_LITTLEFS_HUMAN_READABLE
-/**
- * @brief converts an enumerated lfs error into a string.
- * @param lfs_errno The enumerated littlefs error.
- */
-const char * esp_littlefs_errno(enum lfs_error lfs_errno);
-#endif
-
 #ifdef __cplusplus
 } // extern "C"
 #endif
