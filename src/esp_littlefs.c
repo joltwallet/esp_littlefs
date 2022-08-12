@@ -7,6 +7,8 @@
 //#define LOG_LOCAL_LEVEL 5
 
 #include "esp_littlefs.h"
+#include "littlefs/lfs.h"
+#include "sdkconfig.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -58,6 +60,16 @@ static const char TAG[] = "esp_littlefs";
 #define CONFIG_LITTLEFS_FD_CACHE_REALLOC_FACTOR 2  /* Amount to resize FD cache by */
 #define CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE 4  /* Minimum size of FD cache */
 #define CONFIG_LITTLEFS_FD_CACHE_HYST 4  /* When shrinking, leave this many trailing FD slots available */
+
+/**
+ * @brief Last Modified Time
+ *
+ * Use 't' for LITTLEFS_ATTR_MTIME to match example:
+ *     https://github.com/ARMmbed/littlefs/issues/23#issuecomment-482293539
+ * And to match other external tools such as:
+ *     https://github.com/earlephilhower/mklittlefs
+ */
+#define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
 /**
  * @brief littlefs DIR structure
@@ -137,7 +149,18 @@ static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
 /********************
  * Helper Functions *
  ********************/
-void esp_littlefs_free_fds(esp_littlefs_t * efs) {
+
+
+#if CONFIG_LITTLEFS_HUMAN_READABLE
+/**
+ * @brief converts an enumerated lfs error into a string.
+ * @param lfs_errno The enumerated littlefs error.
+ */
+static const char * esp_littlefs_errno(enum lfs_error lfs_errno);
+#endif
+
+
+static void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
     while (efs->file) {
         vfs_littlefs_file_t * next = efs->file->next;
@@ -378,12 +401,18 @@ exit:
     return err;
 }
 
+/********************
+ * Static Functions *
+ ********************/
+
+/*** Helpers ***/
+
 #if CONFIG_LITTLEFS_HUMAN_READABLE
 /**
  * @brief converts an enumerated lfs error into a string.
  * @param lfs_error The littlefs error.
  */
-const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
+static const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
     switch(lfs_errno){
         case LFS_ERR_OK: return "LFS_ERR_OK";
         case LFS_ERR_IO: return "LFS_ERR_IO";
@@ -407,12 +436,6 @@ const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
 #else
 #define esp_littlefs_errno(x) ""
 #endif
-
-/********************
- * Static Functions *
- ********************/
-
-/*** Helpers ***/
 
 /**
  * @brief Free and clear a littlefs definition structure.

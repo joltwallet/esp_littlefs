@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "esp_idf_version.h"
