@@ -23,6 +23,7 @@ jobs:
             "release-v4.2",
             "release-v4.3",
             "release-v4.4",
+            "release-v5.0",
             "latest",
           ]
         idf_target: ["esp32"]
