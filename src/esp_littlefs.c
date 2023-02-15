@@ -1771,7 +1771,11 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
     }
     else
     {
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGV( TAG, "Truncated file %s to %u bytes", file->path, (unsigned int) size );
+#else
+        ESP_LOGV(TAG, "Truncated FD %d to %u bytes", fd, (unsigned int) size );
+#endif
     }
     return res;
 
