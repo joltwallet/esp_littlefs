@@ -4,7 +4,9 @@
  * @author Brian Pugh
  */
 
-//#define LOG_LOCAL_LEVEL 5
+#ifndef LOG_LOCAL_LEVEL
+#define LOG_LOCAL_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+#endif // LOG_LOCAL_LEVEL
 
 #include "esp_littlefs.h"
 #include "esp_log.h"
