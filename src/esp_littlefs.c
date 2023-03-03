@@ -114,7 +114,6 @@ static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 #endif
 
 static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
-static esp_err_t esp_littlefs_erase_partition(const char *partition_label);
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
@@ -367,11 +366,10 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
         esp_littlefs_free_fds(efs);
     }
 
-    /* Erase and Format */
+    /* Format */
     {
         int res;
         ESP_LOGV(ESP_LITTLEFS_TAG, "Formatting filesystem");
-        esp_littlefs_erase_partition(partition_label);
         res = lfs_format(efs->fs, &efs->cfg);
         if( res != LFS_ERR_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to format filesystem");
@@ -512,30 +510,6 @@ static esp_err_t esp_littlefs_get_empty(int *index) {
     }
     ESP_LOGE(ESP_LITTLEFS_TAG, "No more free partitions available.");
     return ESP_FAIL;
-}
-
-/**
- * @brief erase a partition; make sure LittleFS is unmounted first.
- * @param partition_label NULL-terminated string of partition to erase
- * @return ESP_OK on success
- */
-static esp_err_t esp_littlefs_erase_partition(const char *partition_label) {
-    ESP_LOGV(ESP_LITTLEFS_TAG, "Erasing partition...");
-
-    const esp_partition_t* partition = esp_partition_find_first(
-            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
-            partition_label);
-    if (!partition) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "partition \"%s\" could not be found", partition_label);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    if( esp_partition_erase_range(partition, 0, partition->size) != ESP_OK ) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to erase partition");
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
 }
 
 /**
