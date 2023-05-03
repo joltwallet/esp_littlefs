@@ -153,7 +153,7 @@ In `menuconfig`:
 
 * Set the partition table to `components/littlefs/partition_table_unit_test_app.csv`
 
-* Double check your crystal frequency; my board doesn't work with autodetect.
+* Double check your crystal frequency `ESP32_XTAL_FREQ_SEL`; my board doesn't work with autodetect.
 
 To test on an encrypted partition, add the `encrypted` flag to the `flash_test` partition
 in `partition_table_unit_test_app.csv`. I.e.
@@ -173,6 +173,7 @@ idf.py -T littlefs -p YOUR_PORT_HERE encrypted-flash monitor
 # Breaking Changes
 
 * July 22, 2020 - Changed attribute type for file timestamp from `0` to `0x74` ('t' ascii value).
+* May 3, 2023 - All logging tags have been changed to a unified `esp_littlfs`.
 
 # Acknowledgement
 
