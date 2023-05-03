@@ -10,7 +10,7 @@ menu "LittleFS"
     config LITTLEFS_PAGE_SIZE
         int "LITTLEFS logical page size"
         default 256
-        range 256 1022
+        range 256 1024
         help
             Logical page size of LITTLEFS partition, in bytes. Must be multiple
             of flash page size (which is usually 256 bytes).
@@ -22,12 +22,12 @@ menu "LittleFS"
     config LITTLEFS_OBJ_NAME_LEN
         int "Maximum object name length including NULL terminator."
         default 64
-        range 16 1024
+        range 16 1022
         help
             Includes NULL-terminator.
-            If using mklittlefs, make sure to change the default LFS_NAME_MAX=32
-            when compiling mklittlefs. If downloading a pre-built release of
-            mklittlefs, it was most-likely built with LFS_NAME_MAX=32.
+            If flashing a pre-compiled image, make sure to rebuild mklittlefs.
+            If downloading a pre-built release of mklittlefs, it was most-likely
+            built with LFS_NAME_MAX=32 and should not be used.
 
     config LITTLEFS_READ_SIZE
         int "Minimum size of a block read."
