@@ -22,9 +22,13 @@ menu "LittleFS"
     config LITTLEFS_OBJ_NAME_LEN
         int "Maximum object name length including NULL terminator."
         default 64
-        range 16 1024
+        range 16 1022
         help
-            Includes NULL-terminator.
+            Includes NULL-terminator. If flashing a prebuilt filesystem image,
+            rebuild the filesystem image if this value changes.
+            mklittlefs, the tool that generates the image will automatically be rebuilt.
+            If downloading a pre-built release of mklittlefs, it was most-likely
+            built with LFS_NAME_MAX=32 and should not be used.
 
     config LITTLEFS_READ_SIZE
         int "Minimum size of a block read."
