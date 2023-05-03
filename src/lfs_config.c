@@ -6,6 +6,8 @@
  */
 #include "lfs_config.h"
 
+const char ESP_LITTLEFS_TAG[] = "esp_littlefs";
+
 // Software CRC implementation with small lookup table
 uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size) {
     static const uint32_t rtable[16] = {
