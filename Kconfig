@@ -24,8 +24,9 @@ menu "LittleFS"
         default 64
         range 16 1022
         help
-            Includes NULL-terminator.
-            If flashing a pre-compiled image, make sure to rebuild mklittlefs.
+            Includes NULL-terminator. If flashing a prebuilt filesystem image,
+            rebuild the filesystem image if this value changes.
+            mklittlefs, the tool that generates the image will automatically be rebuilt.
             If downloading a pre-built release of mklittlefs, it was most-likely
             built with LFS_NAME_MAX=32 and should not be used.
 

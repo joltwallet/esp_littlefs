@@ -20,8 +20,9 @@ function(littlefs_create_partition_image partition base_dir)
 
 	add_custom_command(
 		OUTPUT ${MKLITTLEFS}
-		COMMAND make dist LFS_NAME_MAX=${CONFIG_LITTLEFS_OBJ_NAME_LEN}
+		COMMAND make clean && make dist LFS_NAME_MAX=${CONFIG_LITTLEFS_OBJ_NAME_LEN}
 		WORKING_DIRECTORY ${MKLITTLEFS_DIR}
+		DEPENDS ${SDKCONFIG}
 	)
 
 	if("${size}" AND "${offset}")
