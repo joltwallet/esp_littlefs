@@ -10,7 +10,7 @@ menu "LittleFS"
     config LITTLEFS_PAGE_SIZE
         int "LITTLEFS logical page size"
         default 256
-        range 256 1024
+        range 256 1022
         help
             Logical page size of LITTLEFS partition, in bytes. Must be multiple
             of flash page size (which is usually 256 bytes).
