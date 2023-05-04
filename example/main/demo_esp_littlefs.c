@@ -132,11 +132,31 @@ void app_main(void)
                 ESP_LOGE(TAG, "Failed to open file for reading");
                 return;
         }
-        char line[64];
+
+        char line[128];
+        char *pos;
+
         fgets(line, sizeof(line), f);
         fclose(f);
         // strip newline
-        char *pos = strchr(line, '\n');
+        pos = strchr(line, '\n');
+        if (pos)
+        {
+                *pos = '\0';
+        }
+        ESP_LOGI(TAG, "Read from file: '%s'", line);
+
+        ESP_LOGI(TAG, "Reading from flashed filesystem example.txt");
+        f = fopen("/littlefs/example.txt", "r");
+        if (f == NULL)
+        {
+                ESP_LOGE(TAG, "Failed to open file for reading");
+                return;
+        }
+        fgets(line, sizeof(line), f);
+        fclose(f);
+        // strip newline
+        pos = strchr(line, '\n');
         if (pos)
         {
                 *pos = '\0';
