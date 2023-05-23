@@ -39,17 +39,13 @@ function(littlefs_create_partition_image partition base_dir)
 			ADDITIONAL_MAKE_CLEAN_FILES
 			${image_file})
 
-		if(IDF_VER MATCHES "^v")
-			string(SUBSTRING "${IDF_VER}" 1 -1 IDF_VER_NO_V)
-		else()
-			string(SUBSTRING "${IDF_VER}" 0 -1 IDF_VER_NO_V)
-		endif()
+		set(IDF_VER_NO_V "${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}")
 
 		if(${IDF_VER_NO_V} VERSION_LESS 4.1)
 			message(WARNING "Unsupported/unmaintained/deprecated ESP-IDF version ${IDF_VER}")
 		endif()
 
-		if(${IDF_VER_NO_V} VERSION_GREATER 4.2)
+		if(${IDF_VER_NO_V} VERSION_GREATER_EQUAL 4.2)
 			idf_component_get_property(main_args esptool_py FLASH_ARGS)
 			idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
 			esptool_py_flash_target(${partition}-flash "${main_args}" "${sub_args}")
