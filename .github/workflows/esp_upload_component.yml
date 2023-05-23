@@ -2,8 +2,8 @@ name: Push LittleFS to Espressif Component Service
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - "v*.*.*"
 
 jobs:
   upload_components:
