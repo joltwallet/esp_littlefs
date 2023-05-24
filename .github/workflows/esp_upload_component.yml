@@ -13,8 +13,8 @@ jobs:
         with:
           submodules: recursive
       - name: Upload component to component service
-        uses: espressif/github-actions/upload_components@master
+        uses: espressif/upload-components-ci-action@v1
         with:
           name: "LittleFS"
           namespace: "joltwallet"
-          api_token: ${{ secrets.ESP_IDF_COMPONENT_API_TOKEN }} 
+          api_token: ${{ secrets.ESP_IDF_COMPONENT_API_TOKEN }}
