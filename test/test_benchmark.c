@@ -1,24 +1,12 @@
-#include "esp_err.h"
-#include "esp_log.h"
-#include "esp_spiffs.h"
-#include "esp_system.h"
-#include "esp_timer.h"
-#include "esp_vfs.h"
+#include "test_littlefs_common.h"
 #include "esp_vfs_fat.h"
-#include "esp_littlefs.h"
-#include "unity.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "esp_partition.h"
-#include "esp_idf_version.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #define esp_vfs_fat_spiflash_mount esp_vfs_fat_spiflash_mount_rw_wl
 #define esp_vfs_fat_spiflash_unmount esp_vfs_fat_spiflash_unmount_rw_wl
 #endif
 
-static const char TAG[] = "[benchmark]";
+static const char TAG[] = "[littlefs_benchmark]";
 
 // Handle of the wear levelling library instance
 wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
@@ -75,14 +63,14 @@ static void setup_littlefs() {
     esp_littlefs_format("flash_test");
 }
 
-static void test_setup() {
+static void test_benchmark_setup() {
     setup_fat();
     setup_spiffs();
     setup_littlefs();
     printf("Test setup complete.\n");
 }
 
-static void test_teardown()
+static void test_benchmark_teardown()
 {
     assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
     TEST_ESP_OK(esp_vfs_spiffs_unregister("spiffs_store"));
@@ -254,7 +242,7 @@ TEST_CASE("Format", TAG){
 }
 
 TEST_CASE("Write 5 files, read 5 files, then delete 5 files", TAG){
-    test_setup();
+    test_benchmark_setup();
 
     printf("FAT:\n");
     read_write_test_1("/fat", 5);
@@ -268,5 +256,5 @@ TEST_CASE("Write 5 files, read 5 files, then delete 5 files", TAG){
     read_write_test_1("/littlefs", 5);
     printf("\n");
 
-    test_teardown();
+    test_benchmark_teardown();
 }
