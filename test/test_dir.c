@@ -6,6 +6,60 @@
 
 //#define LOG_LOCAL_LEVEL 4
 
+TEST_CASE("truncate", "[littlefs]")
+{
+    test_setup();
+
+    FILE* f;
+    char buf[10] = { 0 };
+    const char fn[] = littlefs_base_path "/truncate.txt";
+
+    f = fopen(fn, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(11, fprintf(f, "0123456789\n"));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    TEST_ASSERT_EQUAL(0, truncate(fn, 3));
+
+    f = fopen(fn, "r");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(3, fread(buf, 1, 8, f));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT_EQUAL_STRING_LEN("012", buf, 8);
+
+    test_teardown();
+}
+
+#ifdef ESP_LITTLEFS_ENABLE_FTRUNCATE
+TEST_CASE("ftruncate", "[littlefs]")
+{
+    test_setup();
+
+    int fd;
+    FILE* f;
+    char buf[10] = { 0 };
+    const char fn[] = littlefs_base_path "/truncate.txt";
+
+    f = fopen(fn, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(11, fprintf(f, "0123456789\n"));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+
+    fd = open(fn, O_RDWR);
+    TEST_ASSERT_EQUAL(0, ftruncate(fd, 3));
+    TEST_ASSERT_EQUAL(0, close(fd));
+
+
+    f = fopen(fn, "r");
+    TEST_ASSERT_NOT_NULL(f);
+    TEST_ASSERT_EQUAL(3, fread(buf, 1, 8, f));
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT_EQUAL_STRING_LEN("012", buf, 8);
+
+    test_teardown();
+}
+#endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
+
 
 static void test_littlefs_readdir_many_files(const char* dir_prefix)
 {
@@ -208,5 +262,81 @@ TEST_CASE("readdir with large number of files", "[littlefs][timeout=30]")
     test_littlefs_readdir_many_files(littlefs_base_path "/dir2");
     test_teardown();
 }
+
+TEST_CASE("can opendir root directory of FS", "[littlefs]")
+{
+    test_setup();
+
+    const char path[] = littlefs_base_path;
+
+    char name_dir_file[64];
+    const char * file_name = "test_opd.txt";
+    snprintf(name_dir_file, sizeof(name_dir_file), "%s/%s", path, file_name);
+    unlink(name_dir_file);
+    test_littlefs_create_file_with_text(name_dir_file, "test_opendir\n");
+    DIR* dir = opendir(path);
+    TEST_ASSERT_NOT_NULL(dir);
+    bool found = false;
+    while (true) {
+        struct dirent* de = readdir(dir);
+        if (!de) {
+            break;
+        }
+        if (strcasecmp(de->d_name, file_name) == 0) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+    TEST_ASSERT_EQUAL(0, closedir(dir));
+    unlink(name_dir_file);
+
+    test_teardown();
+}
+
+TEST_CASE("unlink removes a file", "[littlefs]")
+{
+    test_setup();
+
+    const char filename[] = littlefs_base_path "/unlink.txt";
+
+    test_littlefs_create_file_with_text(filename, "unlink\n");
+    TEST_ASSERT_EQUAL(0, unlink(filename));
+    TEST_ASSERT_NULL(fopen(filename, "r"));
+
+    test_teardown();
+}
+
+TEST_CASE("rename moves a file", "[littlefs]")
+{
+    test_setup();
+    const char filename_prefix[] = littlefs_base_path "/move";
+
+    char name_dst[64];
+    char name_src[64];
+    snprintf(name_dst, sizeof(name_dst), "%s_dst.txt", filename_prefix);
+    snprintf(name_src, sizeof(name_src), "%s_src.txt", filename_prefix);
+
+    unlink(name_dst);
+    unlink(name_src);
+
+    FILE* f = fopen(name_src, "w+");
+    TEST_ASSERT_NOT_NULL(f);
+    const char* str = "0123456789";
+    for (int i = 0; i < 400; ++i) {
+        TEST_ASSERT_NOT_EQUAL(EOF, fputs(str, f));
+    }
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT_EQUAL(0, rename(name_src, name_dst));
+    TEST_ASSERT_NULL(fopen(name_src, "r"));
+    FILE* fdst = fopen(name_dst, "r");
+    TEST_ASSERT_NOT_NULL(fdst);
+    TEST_ASSERT_EQUAL(0, fseek(fdst, 0, SEEK_END));
+    TEST_ASSERT_EQUAL(4000, ftell(fdst));
+    TEST_ASSERT_EQUAL(0, fclose(fdst));
+
+    test_teardown();
+}
+
 
 #endif

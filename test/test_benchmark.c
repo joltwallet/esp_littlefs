@@ -6,7 +6,7 @@
 #define esp_vfs_fat_spiflash_unmount esp_vfs_fat_spiflash_unmount_rw_wl
 #endif
 
-static const char TAG[] = "[benchmark]";
+static const char TAG[] = "[littlefs_benchmark]";
 
 // Handle of the wear levelling library instance
 wl_handle_t s_wl_handle = WL_INVALID_HANDLE;

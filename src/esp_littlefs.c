@@ -23,7 +23,6 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
-#include "esp_idf_version.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "spi_flash_mmap.h"
@@ -52,10 +51,6 @@
 #else
 #include "rom/spi_flash.h" //IDF 3
 #endif
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2) && CONFIG_VFS_SUPPORT_DIR
-#define LITTLEFS_ENABLE_FTRUNCATE
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
@@ -109,9 +104,9 @@ static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
 static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size);
 
-#ifdef LITTLEFS_ENABLE_FTRUNCATE
+#ifdef ESP_LITTLEFS_ENABLE_FTRUNCATE
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size);
-#endif // LITTLEFS_ENABLE_FTRUNCATE
+#endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
 
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 #endif
@@ -262,9 +257,9 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .rmdir_p     = &vfs_littlefs_rmdir,
         // access_p
 		.truncate_p  = &vfs_littlefs_truncate,
-#ifdef LITTLEFS_ENABLE_FTRUNCATE
+#ifdef ESP_LITTLEFS_ENABLE_FTRUNCATE
         .ftruncate_p = &vfs_littlefs_ftruncate,
-#endif // LITTLEFS_ENABLE_FTRUNCATE
+#endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
 #if CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
 #endif // CONFIG_LITTLEFS_USE_MTIME
@@ -1756,7 +1751,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     return res;
 }
 
-#ifdef LITTLEFS_ENABLE_FTRUNCATE
+#ifdef ESP_LITTLEFS_ENABLE_FTRUNCATE
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1796,7 +1791,7 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
     }
     return res;
 }
-#endif // LITTLEFS_ENABLE_FTRUNCATE
+#endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
 #endif //CONFIG_VFS_SUPPORT_DIR
 
 #if CONFIG_LITTLEFS_USE_MTIME
