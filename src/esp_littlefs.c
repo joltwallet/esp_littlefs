@@ -53,6 +53,9 @@
 #include "rom/spi_flash.h" //IDF 3
 #endif
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2) && CONFIG_VFS_SUPPORT_DIR
+#define LITTLEFS_ENABLE_FTRUNCATE
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
 
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
@@ -89,6 +92,7 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
 static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off_t offset);
 static int     vfs_littlefs_close(void* ctx, int fd);
 static off_t   vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode);
+static int     vfs_littlefs_fsync(void* ctx, int fd);
 
 #ifdef CONFIG_VFS_SUPPORT_DIR
 static int     vfs_littlefs_stat(void* ctx, const char * path, struct stat * st);
@@ -103,12 +107,11 @@ static long    vfs_littlefs_telldir(void* ctx, DIR* pdir);
 static void    vfs_littlefs_seekdir(void* ctx, DIR* pdir, long offset);
 static int     vfs_littlefs_mkdir(void* ctx, const char* name, mode_t mode);
 static int     vfs_littlefs_rmdir(void* ctx, const char* name);
-static int     vfs_littlefs_fsync(void* ctx, int fd);
 static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size);
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
+#ifdef LITTLEFS_ENABLE_FTRUNCATE
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size);
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
+#endif // LITTLEFS_ENABLE_FTRUNCATE
 
 static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 #endif
@@ -239,35 +242,32 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
         .pread_p     = &vfs_littlefs_pread,
         .open_p      = &vfs_littlefs_open,
         .close_p     = &vfs_littlefs_close,
+        .fsync_p     = &vfs_littlefs_fsync,
         .fcntl_p     = &vfs_littlefs_fcntl,
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         .fstat_p     = &vfs_littlefs_fstat,
 #endif
-
 #ifdef CONFIG_VFS_SUPPORT_DIR
         .stat_p      = &vfs_littlefs_stat,
         .link_p      = NULL, /* Not Supported */
         .unlink_p    = &vfs_littlefs_unlink,
         .rename_p    = &vfs_littlefs_rename,
         .opendir_p   = &vfs_littlefs_opendir,
-        .closedir_p  = &vfs_littlefs_closedir,
         .readdir_p   = &vfs_littlefs_readdir,
         .readdir_r_p = &vfs_littlefs_readdir_r,
-        .seekdir_p   = &vfs_littlefs_seekdir,
         .telldir_p   = &vfs_littlefs_telldir,
+        .seekdir_p   = &vfs_littlefs_seekdir,
+        .closedir_p  = &vfs_littlefs_closedir,
         .mkdir_p     = &vfs_littlefs_mkdir,
         .rmdir_p     = &vfs_littlefs_rmdir,
-        .fsync_p     = &vfs_littlefs_fsync,
+        // access_p
 		.truncate_p  = &vfs_littlefs_truncate,
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
+#ifdef LITTLEFS_ENABLE_FTRUNCATE
         .ftruncate_p = &vfs_littlefs_ftruncate,
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
-
+#endif // LITTLEFS_ENABLE_FTRUNCATE
 #if CONFIG_LITTLEFS_USE_MTIME
         .utime_p     = &vfs_littlefs_utime,
 #endif // CONFIG_LITTLEFS_USE_MTIME
-       
 #endif // CONFIG_VFS_SUPPORT_DIR
     };
 
@@ -1308,7 +1308,6 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     return res;
 }
 
-#ifdef CONFIG_VFS_SUPPORT_DIR
 static int vfs_littlefs_fsync(void* ctx, int fd)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1340,7 +1339,6 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
 
     return res;
 }
-#endif
 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
 static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
@@ -1758,7 +1756,7 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     return res;
 }
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
+#ifdef LITTLEFS_ENABLE_FTRUNCATE
 static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 {
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
@@ -1797,10 +1795,8 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 #endif
     }
     return res;
-
 }
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
-
+#endif // LITTLEFS_ENABLE_FTRUNCATE
 #endif //CONFIG_VFS_SUPPORT_DIR
 
 #if CONFIG_LITTLEFS_USE_MTIME
