@@ -70,25 +70,33 @@ littlefs_create_partition_image(graphics device_graphics)
 # Performance
 
 Here are some naive benchmarks to give a vague indicator on performance.
+Tests were performed with the following configuration:
 
-Formatting a ~512KB partition:
+* ESP-IDF: v4.4
+* Target: ESP32
+* CPU Clock: 160MHz
+* Flash SPI Freq: 80MHz
+* Flash SPI Mode: QIO
+
+In these tests, FAT has a cache size of 4096, and SPIFFS has a cahce size of 256 bytes.
+
+#### Formatting a 512KB partition
 
 ```
-FAT:         963,766 us
-SPIFFS:   10,824,054 us
-LittleFS:  2,067,845 us
+FAT:         549,494 us
+SPIFFS:   10,715,425 us
+LittleFS:    110,997 us
 ```
 
-Writing 5 88KB files:
+#### Writing 5 88KB files
 
 ```
-FAT:         13,601,171 us
-SPIFFS*:    118,883,197 us
-LittleFS**:   6,582,045 us
-LittleFS***:  5,734,811 us
+FAT:                            7,124,812 us
+SPIFFS*:                       99,138,905 us
+LittleFS (cache=128):           8,261,920 us
+LittleFS (cache=512 default):   6,356,247 us
+LittleFS (cache=4096):          6,026,592 us
 *Only wrote 374,784 bytes instead of the benchmark 440,000, so this value is extrapolated
-**CONFIG_LITTLEFS_CACHE_SIZE=128
-***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
 In the above test, SPIFFS drastically slows down as the filesystem fills up. Below
@@ -99,35 +107,33 @@ on the last file write.
 ```
 SPIFFS:
 
-88000 bytes written in 1325371 us
-88000 bytes written in 1327848 us
-88000 bytes written in 5292095 us
-88000 bytes written in 19191680 us
-22784 bytes written in 74082963 us
+88000 bytes written in 2190635 us
+88000 bytes written in 2190321 us
+88000 bytes written in 5133605 us
+88000 bytes written in 16570667 us
+22784 bytes written in 73053677 us
 ```
 
-Reading 5 88KB files:
+#### Reading 5 88KB files
 
 ```
-FAT:          3,111,817 us
-SPIFFS*:      3,392,886 us
-LittleFS**:   3,425,796 us
-LittleFS***:  3,210,140 us
+FAT:                            5,685,230 us
+SPIFFS*:                        5,162,289 us
+LittleFS (cache=128):           6,284,142 us
+LittleFS (cache=512 default):   5,874,931 us
+LittleFS (cache=4096):          5,731,385 us
 *Only read 374,784 bytes instead of the benchmark 440,000, so this value is extrapolated
-**CONFIG_LITTLEFS_CACHE_SIZE=128
-***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
-Deleting 5 88KB files:
+#### Deleting 5 88KB files
 
 ```
-FAT:         934,769 us
-SPIFFS*:      822,730 us
-LittleFS**:   31,502 us
-LittleFS***:  20,063 us
+FAT:                              680,358 us
+SPIFFS*:                        1,653,500 us
+LittleFS (cache=128):              86,090 us
+LittleFS (cache=512 default):      53,705 us
+LittleFS (cache=4096):             27,709 us
 *The 5th file was smaller, did not extrapolate value.
-**CONFIG_LITTLEFS_CACHE_SIZE=128
-***CONFIG_LITTLEFS_CACHE_SIZE=512 (default value)
 ```
 
 
