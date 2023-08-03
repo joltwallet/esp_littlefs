@@ -618,6 +618,17 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         efs->cfg.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
         efs->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         efs->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
+#if CONFIG_LITTLEFS_MULTIVERSION
+#if CONFIG_LITTLEFS_DISK_VERSION_MOST_RECENT
+        efs->cfg.disk_version = 0;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_1
+        efs->cfg.disk_version = 0x00020001;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_0
+        efs->cfg.disk_version = 0x00020000;
+#else
+#error "CONFIG_LITTLEFS_MULTIVERSION enabled but no or unknown disk version selected!"
+#endif
+#endif
     }
 
     efs->lock = xSemaphoreCreateRecursiveMutex();
