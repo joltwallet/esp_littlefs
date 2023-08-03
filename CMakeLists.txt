@@ -22,3 +22,7 @@ set_source_files_properties(
 if(CONFIG_LITTLEFS_FCNTL_GET_PATH)
     target_compile_definitions(${COMPONENT_LIB} PUBLIC -DF_GETPATH=${CONFIG_LITTLEFS_FCNTL_F_GETPATH_VALUE})
 endif()
+
+if(CONFIG_LITTLEFS_MULTIVERSION)
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DLFS_MULTIVERSION)
+endif()
