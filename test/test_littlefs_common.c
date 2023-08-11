@@ -25,6 +25,25 @@ void test_littlefs_read_file(const char* filename)
     TEST_ASSERT_EQUAL(0, fclose(f));
 }
 
+void test_littlefs_read_file_with_content(const char* filename, const char* expected_content)
+{
+    FILE* f = fopen(filename, "r");
+    TEST_ASSERT_NOT_NULL(f);
+    char buf[32] = { 0 };
+  
+    const size_t expected_content_length = strlen(expected_content);
+    size_t read_length = 0;
+    int cb = 0;
+    do {
+       cb = fread(buf, 1, sizeof(buf), f);
+       TEST_ASSERT_TRUE(read_length + cb <= expected_content_length);
+       TEST_ASSERT_TRUE(memcmp(buf, &expected_content[read_length], cb) == 0);
+       read_length += cb;
+    } while(cb != 0);
+    
+    TEST_ASSERT_EQUAL(expected_content_length, read_length);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+}
 
 void test_setup() {
     esp_littlefs_format(littlefs_test_partition_label);
