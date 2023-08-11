@@ -55,6 +55,7 @@ typedef struct {
     vfs_littlefs_file_t **cache;              /*!< A cache of pointers to the opened files */
     uint16_t             cache_size;          /*!< The cache allocated size (in pointers) */
     uint16_t             fd_count;            /*!< The count of opened file descriptor used to speed up computation */
+    bool                 read_only;           /*!< Filesystem is read-only */
 } esp_littlefs_t;
 
 /**

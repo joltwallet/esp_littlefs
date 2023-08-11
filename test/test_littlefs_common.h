@@ -42,6 +42,7 @@ extern const char littlefs_test_hello_str[];
 
 void test_littlefs_create_file_with_text(const char* name, const char* text);
 void test_littlefs_read_file(const char* filename);
+void test_littlefs_read_file_with_content(const char* filename, const char* expected_content);
 
 void test_setup();
 void test_teardown();
