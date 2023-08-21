@@ -13,7 +13,7 @@ There are two ways to add this component to your project
 1. As a ESP-IDF managed component: In your project directory run
 
 ```
-idf.py add-dependency joltwallet/littlefs==1.7.0
+idf.py add-dependency joltwallet/littlefs==1.8.0
 ```
 
 2. As a submodule: In your project, add this as a submodule to your `components/` directory.
