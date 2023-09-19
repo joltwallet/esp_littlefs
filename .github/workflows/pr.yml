@@ -10,60 +10,35 @@ on:
   schedule:
     - cron: "0 1 * * 6" # Every Saturday at 1AM
 
-# Based on https://github.com/igrr/libnmea-esp32/blob/main/.github/workflows/build.yml
 jobs:
   build-component:
     timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["release-v4.3", "release-v4.4", "release-v5.0", "latest"]
+        idf_ver: ["v4.3", "v4.4", "v5.0", "latest"]
         idf_target: ["esp32"]
         include:
-          - idf_ver: "release-v4.4"
+          - idf_ver: "v4.4"
             idf_target: esp32s2
-          - idf_ver: "release-v4.4"
+          - idf_ver: "v4.4"
             idf_target: esp32c3
-          - idf_ver: "release-v4.4"
+          - idf_ver: "v4.4"
             idf_target: esp32s3
     runs-on: ubuntu-latest
-    container: espressif/idf:${{ matrix.idf_ver }}
     steps:
-      - name: Update git
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y software-properties-common g++
-          add-apt-repository -y ppa:git-core/ppa
-          apt-get update
-          apt-get install -y git
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-      - name: Build for ESP32
-        env:
-          IDF_TARGET: ${{ matrix.idf_target }}
-        shell: bash
-        run: |
-          . ${IDF_PATH}/export.sh
-          cd example
-          idf.py build
-
-  build-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    strategy:
-      fail-fast: false
-      matrix:
-        idf_ver: ["v4.3.3", "v4.4.1", "latest"]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: esp-idf build library
+        uses: espressif/esp-idf-ci-action@v1
         with:
-          submodules: recursive
-      - name: esp-idf build
+          esp_idf_version: ${{ matrix.idf_ver }}
+          target: ${{ matrix.idf_target }}
+          path: "example/"
+          command: idf.py build
+
+      - name: esp-idf build tests
         uses: espressif/esp-idf-ci-action@main
         with:
           esp_idf_version: ${{ matrix.idf_ver }}
