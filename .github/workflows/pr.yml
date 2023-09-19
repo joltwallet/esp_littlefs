@@ -27,6 +27,11 @@ jobs:
             idf_target: esp32s3
     runs-on: ubuntu-latest
     steps:
+      - name: Install g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+
       - uses: actions/checkout@v3
         with:
           submodules: recursive
