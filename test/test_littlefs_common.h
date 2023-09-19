@@ -10,6 +10,7 @@
 #include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_partition.h"
+#include "esp_rom_sys.h"
 #include "esp_spiffs.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -28,12 +29,6 @@
 #include <sys/time.h>
 #include <sys/unistd.h>
 #include <time.h>
-
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
-#define esp_rom_printf ets_printf
-#else
-#include "esp_rom_sys.h"
-#endif
 
 #define littlefs_base_path "/littlefs"
 extern const char littlefs_test_partition_label[];
