@@ -17,20 +17,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver:
-          [
-            "release-v4.1",
-            "release-v4.2",
-            "release-v4.3",
-            "release-v4.4",
-            "release-v5.0",
-            "latest",
-          ]
+        idf_ver: ["release-v4.3", "release-v4.4", "release-v5.0", "latest"]
         idf_target: ["esp32"]
         include:
-          - idf_ver: "release-v4.2"
+          - idf_ver: "release-v4.4"
             idf_target: esp32s2
-          - idf_ver: "release-v4.3"
+          - idf_ver: "release-v4.4"
             idf_target: esp32c3
           - idf_ver: "release-v4.4"
             idf_target: esp32s3
@@ -40,11 +32,11 @@ jobs:
       - name: Update git
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          apt update
-          apt install -y software-properties-common g++
+          apt-get update
+          apt-get install -y software-properties-common g++
           add-apt-repository -y ppa:git-core/ppa
-          apt update
-          apt install -y git
+          apt-get update
+          apt-get install -y git
       - uses: actions/checkout@v3
         with:
           submodules: recursive
@@ -64,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["v4.2.3", "v4.3.3", "v4.4.1", "latest"]
+        idf_ver: ["v4.3.3", "v4.4.1", "latest"]
 
     steps:
       - name: Checkout repo
