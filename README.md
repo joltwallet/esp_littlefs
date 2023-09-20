@@ -179,7 +179,7 @@ idf.py -T littlefs -p YOUR_PORT_HERE encrypted-flash monitor
 # Breaking Changes
 
 * July 22, 2020 - Changed attribute type for file timestamp from `0` to `0x74` ('t' ascii value).
-* May 3, 2023 - All logging tags have been changed to a unified `esp_littlfs`.
+* May 3, 2023 - All logging tags have been changed to a unified `esp_littlefs`.
 
 # Acknowledgement
 
