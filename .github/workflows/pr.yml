@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["v4.3", "v4.4", "v5.0", "latest"]
+        idf_ver: ["v4.4", "v5.0", "v5.1", "latest"]
         idf_target: ["esp32"]
         include:
           - idf_ver: "v4.4"
@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
 
       - name: esp-idf build library
-        uses: espressif/esp-idf-ci-action@v1
+        uses: espressif/esp-idf-ci-action@main
         with:
           esp_idf_version: ${{ matrix.idf_ver }}
           target: ${{ matrix.idf_target }}
