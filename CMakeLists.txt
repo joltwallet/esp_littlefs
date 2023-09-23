@@ -4,14 +4,18 @@ file(GLOB SOURCES src/littlefs/*.c)
 list(APPEND SOURCES src/esp_littlefs.c src/littlefs_api.c src/lfs_config.c)
 
 if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
-    list(APPEND pr esp_partition)
+    list(APPEND pub_requires esp_partition)
+else()
+    list(APPEND pub_requires spi_flash)
 endif()
+list(APPEND priv_requires esptool_py spi_flash vfs)
 
 idf_component_register(
     SRCS ${SOURCES}
     INCLUDE_DIRS include
     PRIV_INCLUDE_DIRS src
-    PRIV_REQUIRES ${pr} esptool_py spi_flash vfs
+    REQUIRES ${pub_requires}
+    PRIV_REQUIRES ${priv_requires}
 )
 
 set_source_files_properties(
