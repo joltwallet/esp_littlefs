@@ -122,3 +122,47 @@ TEST_CASE("can't write to file", "[littlefs_static]")
 
   test_teardown_static(&partition);
 }
+
+TEST_CASE("grow filesystem", "[littlefs]")
+{
+    esp_partition_t partition;
+    const esp_partition_t *partition_ro = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA,
+            ESP_PARTITION_SUBTYPE_ANY,
+            littlefs_test_partition_label
+    );
+
+    esp_vfs_littlefs_conf_t conf = {
+      .base_path = littlefs_base_path,
+      .partition = (const esp_partition_t *) &partition,
+    };
+
+    uint32_t shrink_bytes;
+
+    /* Format a smaller partition */
+    {
+        memcpy(&partition, partition_ro, sizeof(esp_partition_t));
+        // Shrink the partition by 2 blocks
+        partition.size -= 8192;
+        TEST_ESP_OK(esp_littlefs_format_partition(&partition));
+        partition.size += 8192;
+    }
+
+    /* Mount, ensure that it does NOT grow */
+    {
+        TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+        TEST_ESP_OK(esp_littlefs_partition_info(&partition, &shrink_bytes, NULL));
+        TEST_ESP_OK(esp_vfs_littlefs_unregister_partition(&partition));
+        TEST_ASSERT_EQUAL(partition.size - 8192, shrink_bytes);
+    }
+
+    /* Mount, ensure that it DOES grow */
+    {
+        uint32_t grow_bytes;
+        conf.grow_on_mount = true;
+        TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+        TEST_ESP_OK(esp_littlefs_partition_info(&partition, &grow_bytes, NULL));
+        TEST_ESP_OK(esp_vfs_littlefs_unregister_partition(&partition));
+        TEST_ASSERT_EQUAL(shrink_bytes + 8192, grow_bytes);
+    }
+}
