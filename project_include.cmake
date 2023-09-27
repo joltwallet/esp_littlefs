@@ -7,6 +7,10 @@
 set(littlefs_py_venv "${CMAKE_CURRENT_BINARY_DIR}/littlefs_py_venv")
 set(littlefs_py_requirements "${CMAKE_CURRENT_LIST_DIR}/image-building-requirements.txt")
 
+set_directory_properties(PROPERTIES
+    ADDITIONAL_CLEAN_FILES "${littlefs_py_venv}"
+)
+
 function(littlefs_create_partition_image partition base_dir)
 	set(options FLASH_IN_PROJECT)
 	set(multi DEPENDS)
