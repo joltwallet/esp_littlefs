@@ -28,11 +28,12 @@ typedef struct {
     const esp_partition_t* partition; /**< partition to use if partition_label is NULL */
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
     uint8_t read_only : 1;            /**< Mount the partition as read-only. */
-    uint8_t dont_mount:1;             /**< Don't attempt to mount or format. Overrides format_if_mount_failed */
+    uint8_t dont_mount:1;             /**< Don't attempt to mount.*/
+    uint8_t grow_on_mount:1;          /**< Grow filesystem to match partition size on mount.*/
 } esp_vfs_littlefs_conf_t;
 
 /**
- * Register and mount littlefs to VFS with given path prefix.
+ * Register and mount (if configured to) littlefs to VFS with given path prefix.
  *
  * @param   conf                      Pointer to esp_vfs_littlefs_conf_t configuration structure
  *

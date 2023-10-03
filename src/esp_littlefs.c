@@ -216,7 +216,12 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
     {
         int res;
         ESP_LOGV(ESP_LITTLEFS_TAG, "Formatting filesystem");
+
+        /* Need to write explicit block_count to cfg */
+        efs->cfg.block_count = efs->partition->size / efs->cfg.block_size;
         res = lfs_format(efs->fs, &efs->cfg);
+        efs->cfg.block_count = 0;
+
         if( res != LFS_ERR_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to format filesystem");
             return ESP_FAIL;
@@ -242,16 +247,15 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
 }
 
 void get_total_and_used_bytes(esp_littlefs_t *efs, size_t *total_bytes, size_t *used_bytes) {
-    size_t total_bytes_local = efs->cfg.block_size * efs->cfg.block_count;
+    sem_take(efs);
+    size_t total_bytes_local = efs->cfg.block_size * efs->fs->block_count;
     if(total_bytes) *total_bytes = total_bytes_local;
 
     /* lfs_fs_size may return a size larger than the actual filesystem size.
      * https://github.com/littlefs-project/littlefs/blob/9c7e232086f865cff0bb96fe753deb66431d91fd/lfs.h#L658
      */
-    sem_take(efs);
     if(used_bytes) *used_bytes = MIN(total_bytes_local, efs->cfg.block_size * lfs_fs_size(efs->fs));
     sem_give(efs);
-
 }
 
 /********************
@@ -392,7 +396,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
                 .dont_mount = true, 
                 .partition_label = partition_label,
         };
-        err = esp_littlefs_init(&conf); /* Internally MIGHT call esp_littlefs_format */
+        err = esp_littlefs_init(&conf);
         if( err != ESP_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
             goto exit;
@@ -434,7 +438,7 @@ esp_err_t esp_littlefs_format_partition(const esp_partition_t* partition) {
                 .partition_label = NULL,
                 .partition = partition,
         };
-        err = esp_littlefs_init(&conf); /* Internally MIGHT call esp_littlefs_format */
+        err = esp_littlefs_init(&conf);
         if( err != ESP_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
             goto exit;
@@ -700,8 +704,8 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
         // block device configuration
         (*efs)->cfg.read_size = CONFIG_LITTLEFS_READ_SIZE;
         (*efs)->cfg.prog_size = CONFIG_LITTLEFS_WRITE_SIZE;
-        (*efs)->cfg.block_size = CONFIG_LITTLEFS_BLOCK_SIZE;; 
-        (*efs)->cfg.block_count = (*efs)->partition->size / (*efs)->cfg.block_size;
+        (*efs)->cfg.block_size = CONFIG_LITTLEFS_BLOCK_SIZE;
+        (*efs)->cfg.block_count = 0;  // Autodetect ``block_count``
         (*efs)->cfg.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
         (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         (*efs)->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
@@ -801,7 +805,9 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
     // Mount and Error Check
     _efs[index] = efs;
     if(!conf->dont_mount){
-        int res = lfs_mount(efs->fs, &efs->cfg);
+        int res;
+
+        res = lfs_mount(efs->fs, &efs->cfg);
 
         if (conf->format_if_mount_failed && res != LFS_ERR_OK) {
             esp_err_t err;
@@ -822,6 +828,15 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         }
         efs->cache_size = 4;
         efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
+
+        if(conf->grow_on_mount){
+            res = lfs_fs_grow(efs->fs, efs->partition->size / efs->cfg.block_size);
+            if (res != LFS_ERR_OK) {
+                ESP_LOGE(ESP_LITTLEFS_TAG, "FS grow failed, %s (%i)", esp_littlefs_errno(res), res);
+                err = ESP_FAIL;
+                goto exit;
+            }
+        }
     }
 
     err = ESP_OK;
