@@ -685,7 +685,7 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
 {
     /* Allocate Context */
     *efs = calloc(1, sizeof(esp_littlefs_t));
-    if (efs == NULL) {
+    if (*efs == NULL) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "esp_littlefs could not be malloced");
         return ESP_ERR_NO_MEM;
     }
