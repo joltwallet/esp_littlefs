@@ -655,10 +655,12 @@ static int esp_littlefs_flags_conv(int m) {
     int lfs_flags = 0;
 
     // Mask out unsupported flags; can cause internal LFS issues.
-    m &= (O_APPEND | O_RDONLY | O_WRONLY | O_RDWR | O_EXCL | O_CREAT | O_TRUNC);
+    m &= (O_APPEND | O_WRONLY | O_RDWR | O_EXCL | O_CREAT | O_TRUNC);
 
-    if (m == O_APPEND) {ESP_LOGV(ESP_LITTLEFS_TAG, "O_APPEND"); lfs_flags |= LFS_O_APPEND;}
-    if (m == O_RDONLY) {ESP_LOGV(ESP_LITTLEFS_TAG, "O_RDONLY"); lfs_flags |= LFS_O_RDONLY;}
+    // O_RDONLY is 0 and not a flag, so must be explicitly checked
+    if (m == O_RDONLY)  {ESP_LOGV(ESP_LITTLEFS_TAG, "O_RDONLY"); lfs_flags |= LFS_O_RDONLY;}
+
+    if (m & O_APPEND)  {ESP_LOGV(ESP_LITTLEFS_TAG, "O_APPEND"); lfs_flags |= LFS_O_APPEND;}
     if (m & O_WRONLY)  {ESP_LOGV(ESP_LITTLEFS_TAG, "O_WRONLY"); lfs_flags |= LFS_O_WRONLY;}
     if (m & O_RDWR)    {ESP_LOGV(ESP_LITTLEFS_TAG, "O_RDWR");   lfs_flags |= LFS_O_RDWR;}
     if (m & O_EXCL)    {ESP_LOGV(ESP_LITTLEFS_TAG, "O_EXCL");   lfs_flags |= LFS_O_EXCL;}
