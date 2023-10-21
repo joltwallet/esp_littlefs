@@ -169,6 +169,26 @@ TEST_CASE("overwrite and append file", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("use append with other flags", "[littlefs]")
+{
+    // https://github.com/joltwallet/esp_littlefs/issues/154
+    test_setup();
+
+    int fd;
+
+    fd = open(littlefs_base_path "/fcntl.txt", O_CREAT | O_WRONLY | O_TRUNC, 0777);
+    TEST_ASSERT_EQUAL(6, write(fd, "test1\n", 6));
+    TEST_ASSERT_EQUAL(0, close(fd));
+
+    fd = open(littlefs_base_path "/fcntl.txt", O_CREAT | O_WRONLY | O_APPEND, 0777);
+    TEST_ASSERT_EQUAL(0, lseek(fd, 0, SEEK_CUR));
+    TEST_ASSERT_EQUAL(6, write(fd, "test2\n", 6));
+    TEST_ASSERT_EQUAL(12, lseek(fd, 0, SEEK_CUR));
+    TEST_ASSERT_EQUAL(0, close(fd));
+
+    test_teardown();
+}
+
 TEST_CASE("can lseek", "[littlefs]")
 {
     test_setup();
