@@ -215,7 +215,6 @@ static inline void *lfs_malloc(size_t size) {
 #else
     return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #endif
-
 #else
     (void)size;
     return NULL;
