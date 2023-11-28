@@ -17,8 +17,8 @@
 
 
 #if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL) || \
-    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY) || \
-    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY)
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
 #include <stdlib.h>
 #include "esp_heap_caps.h"
 #endif
@@ -217,9 +217,9 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size);
 static inline void *lfs_malloc(size_t size) {
 #if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL)
     return malloc(size);
-#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY)
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
     return heap_caps_aligned_alloc(8, size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY)
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     return heap_caps_aligned_alloc(8, size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
 #else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE and default
     (void)size;
@@ -230,8 +230,8 @@ static inline void *lfs_malloc(size_t size) {
 // Deallocate memory, only used if buffers are not provided to littlefs
 static inline void lfs_free(void *p) {
 #if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL) || \
-    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY) || \
-    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY)
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     free(p);
 #else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE and default
     (void)p;

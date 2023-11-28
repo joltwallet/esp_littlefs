@@ -162,9 +162,9 @@ static const char * esp_littlefs_errno(enum lfs_error lfs_errno);
 
 static inline void * esp_littlefs_calloc(size_t __nmemb, size_t __size) {
     /* Used internally by this wrapper only */
-#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY)
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
     return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY)
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
 #else /* CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE, CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL and default */
     return calloc(__nmemb, __size);

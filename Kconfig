@@ -227,12 +227,12 @@ menu "LittleFS"
                 On systems with heap in PSRAM, if the allocation size exceeds SPIRAM_MALLOC_ALWAYSINTERNAL
                 then external heap will be preferred.
 
-        config LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY
+        config LITTLEFS_MALLOC_STRATEGY_INTERNAL
             bool "Internal heap"
             help
                 Uses ESP-IDF heap_caps_malloc to prefer allocation from internal heap.
 
-        config LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY
+        config LITTLEFS_MALLOC_STRATEGY_SPIRAM
             bool "SPIRAM heap"
             depends on SPIRAM_USE_MALLOC && ESP32_SPIRAM_SUPPORT
             help
