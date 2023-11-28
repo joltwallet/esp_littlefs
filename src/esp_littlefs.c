@@ -160,6 +160,16 @@ static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
 static const char * esp_littlefs_errno(enum lfs_error lfs_errno);
 #endif
 
+static inline void * esp_littlefs_calloc(size_t __nmemb, size_t __size) {
+    /* Used internally by this wrapper only */
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL_ONLY)
+    return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_ONLY)
+    return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+#else /* CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE, CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL and default */
+    return calloc(__nmemb, __size);
+#endif
+}
 
 static void esp_littlefs_free_fds(esp_littlefs_t * efs) {
     /* Need to free all files that were opened */
@@ -239,7 +249,7 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
             return ESP_FAIL;
         }
         efs->cache_size = CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE;  // Initial size of cache; will resize ondemand
-        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = esp_littlefs_calloc(sizeof(*efs->cache), efs->cache_size);
     }
     ESP_LOGV(ESP_LITTLEFS_TAG, "Format Success!");
     
@@ -686,7 +696,7 @@ static void esp_littlefs_take_efs_lock(void) {
 static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition_t* partition, bool read_only)
 {
     /* Allocate Context */
-    *efs = calloc(1, sizeof(esp_littlefs_t));
+    *efs = esp_littlefs_calloc(1, sizeof(esp_littlefs_t));
     if (*efs == NULL) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "esp_littlefs could not be malloced");
         return ESP_ERR_NO_MEM;
@@ -730,7 +740,7 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
         return ESP_ERR_NO_MEM;
     }
 
-    (*efs)->fs = calloc(1, sizeof(lfs_t));
+    (*efs)->fs = esp_littlefs_calloc(1, sizeof(lfs_t));
     if ((*efs)->fs == NULL) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "littlefs could not be malloced");
         return ESP_ERR_NO_MEM;
@@ -829,7 +839,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             goto exit;
         }
         efs->cache_size = 4;
-        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = esp_littlefs_calloc(sizeof(*efs->cache), efs->cache_size);
 
         if(conf->grow_on_mount){
             res = lfs_fs_grow(efs->fs, efs->partition->size / efs->cfg.block_size);
@@ -935,9 +945,9 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
 
     /* Allocate file descriptor here now */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
-    *file = calloc(1, sizeof(**file) + path_len);
+    *file = esp_littlefs_calloc(1, sizeof(**file) + path_len);
 #else
-    *file = calloc(1, sizeof(**file));
+    *file = esp_littlefs_calloc(1, sizeof(**file));
 #endif
 
     if (*file == NULL) {
@@ -1156,8 +1166,12 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     mkdirs(efs, path);
 #endif  // CONFIG_LITTLEFS_SPIFFS_COMPAT
 
+#ifndef CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE
     /* Open File */
     res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
+#else
+    #error "The use of static buffers is not current supported by this VFS wrapper"
+#endif
 
 #if CONFIG_LITTLEFS_OPEN_DIR
     if ( flags & O_DIRECTORY && res ==  LFS_ERR_ISDIR) {
@@ -1692,7 +1706,7 @@ static DIR* vfs_littlefs_opendir(void* ctx, const char* name) {
     int res;
     vfs_littlefs_dir_t *dir = NULL;
 
-    dir = calloc(1, sizeof(vfs_littlefs_dir_t));
+    dir = esp_littlefs_calloc(1, sizeof(vfs_littlefs_dir_t));
     if( dir == NULL ) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "dir struct could not be malloced");
         errno = ENOMEM;
