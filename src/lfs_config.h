@@ -23,7 +23,7 @@
 #include "esp_heap_caps.h"
 #endif
 
-#ifndef LFS_NO_ASSERT
+#ifdef CONFIG_LITTLEFS_ASSERTS
 #include <assert.h>
 #endif
 
@@ -87,12 +87,10 @@ extern const char ESP_LITTLEFS_TAG[];
 #endif
 
 // Runtime assertions
-#ifndef LFS_ASSERT
-#ifndef LFS_NO_ASSERT
+#ifdef CONFIG_LITTLEFS_ASSERTS
 #define LFS_ASSERT(test) assert(test)
 #else
 #define LFS_ASSERT(test)
-#endif
 #endif
 
 

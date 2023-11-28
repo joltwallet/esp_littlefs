@@ -238,5 +238,12 @@ menu "LittleFS"
             help
                 Uses ESP-IDF heap_caps_malloc to prefer allocation from SPIRAM heap.
 
-    endchoice    
+    endchoice
+
+    config LITTLEFS_ASSERTS
+        bool "Enable asserts"
+        default "y"
+        help
+            Selects whether littlefs performs runtime assert checks.
+
 endmenu
