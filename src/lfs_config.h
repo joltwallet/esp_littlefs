@@ -219,7 +219,7 @@ static inline void *lfs_malloc(size_t size) {
     return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
-#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE and default
+#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE or not defined
     (void)size;
     return NULL;
 #endif

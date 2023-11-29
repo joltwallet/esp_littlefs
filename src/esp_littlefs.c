@@ -166,7 +166,7 @@ static inline void * esp_littlefs_calloc(size_t __nmemb, size_t __size) {
     return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
-#else /* CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE, CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT and default */
+#else /* CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE, CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT or not defined */
     return calloc(__nmemb, __size);
 #endif
 }
@@ -1170,7 +1170,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     /* Open File */
     res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
 #else
-    #error "The use of static buffers is not current supported by this VFS wrapper"
+    #error "The use of static buffers is not currently supported by this VFS wrapper"
 #endif
 
 #if CONFIG_LITTLEFS_OPEN_DIR
