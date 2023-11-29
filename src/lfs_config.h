@@ -231,7 +231,7 @@ static inline void lfs_free(void *p) {
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     free(p);
-#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE and default
+#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE or not defined
     (void)p;
 #endif
 }
