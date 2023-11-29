@@ -16,7 +16,7 @@
 #include "esp_log.h"
 
 
-#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL) || \
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT) || \
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
 #include <stdlib.h>
@@ -211,14 +211,14 @@ static inline uint32_t lfs_tobe32(uint32_t a) {
 uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size);
 
 // Allocate memory, only used if buffers are not provided to littlefs
-// Note, memory must be 64-bit aligned
+// For the lookahead buffer, memory must be 32-bit aligned
 static inline void *lfs_malloc(size_t size) {
-#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL)
-    return malloc(size);
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT)
+    return malloc(size); // Equivalent to heap_caps_malloc_default(size);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
-    return heap_caps_aligned_alloc(8, size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
-    return heap_caps_aligned_alloc(8, size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
 #else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE and default
     (void)size;
     return NULL;
@@ -227,7 +227,7 @@ static inline void *lfs_malloc(size_t size) {
 
 // Deallocate memory, only used if buffers are not provided to littlefs
 static inline void lfs_free(void *p) {
-#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_GENERAL) || \
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT) || \
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
     defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     free(p);

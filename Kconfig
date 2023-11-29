@@ -211,7 +211,7 @@ menu "LittleFS"
 
     choice LITTLEFS_MALLOC_STRATEGY
         prompt "Buffer allocation strategy"
-        default LITTLEFS_MALLOC_STRATEGY_GENERAL
+        default LITTLEFS_MALLOC_STRATEGY_DEFAULT
         help
             Maps lfs_malloc to ESP-IDF capabilities-based memory allocator or
             disables dynamic allocation in favour of user-provided static buffers.
@@ -221,22 +221,24 @@ menu "LittleFS"
             help
                 Disallow dynamic allocation, static buffers must be provided by the calling application.
 
-        config LITTLEFS_MALLOC_STRATEGY_GENERAL
-            bool "System malloc"
+        config LITTLEFS_MALLOC_STRATEGY_DEFAULT
+            bool "Default heap selection"
             help
-                On systems with heap in PSRAM, if the allocation size exceeds SPIRAM_MALLOC_ALWAYSINTERNAL
-                then external heap will be preferred.
+                Uses an automatic allocation strategy. On systems with heap in SPIRAM, if
+                the allocation size does not exceed SPIRAM_MALLOC_ALWAYSINTERNAL then internal
+                heap allocation if preferred, otherwise allocation will be attempted from SPIRAM
+                heap.
 
         config LITTLEFS_MALLOC_STRATEGY_INTERNAL
             bool "Internal heap"
             help
-                Uses ESP-IDF heap_caps_malloc to prefer allocation from internal heap.
+                Uses ESP-IDF heap_caps_malloc to allocate from internal heap.
 
         config LITTLEFS_MALLOC_STRATEGY_SPIRAM
             bool "SPIRAM heap"
             depends on SPIRAM_USE_MALLOC && ESP32_SPIRAM_SUPPORT
             help
-                Uses ESP-IDF heap_caps_malloc to prefer allocation from SPIRAM heap.
+                Uses ESP-IDF heap_caps_malloc to allocate from SPIRAM heap.
 
     endchoice
 
