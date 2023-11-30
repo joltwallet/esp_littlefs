@@ -208,4 +208,44 @@ menu "LittleFS"
             bool "Write LittleFS 2.0 (no forward-looking erase-state CRCs)"
 
     endchoice
+
+    choice LITTLEFS_MALLOC_STRATEGY
+        prompt "Buffer allocation strategy"
+        default LITTLEFS_MALLOC_STRATEGY_DEFAULT
+        help
+            Maps lfs_malloc to ESP-IDF capabilities-based memory allocator or
+            disables dynamic allocation in favour of user-provided static buffers.
+
+        config LITTLEFS_MALLOC_STRATEGY_DISABLE
+            bool "Static buffers only"
+            help
+                Disallow dynamic allocation, static buffers must be provided by the calling application.
+
+        config LITTLEFS_MALLOC_STRATEGY_DEFAULT
+            bool "Default heap selection"
+            help
+                Uses an automatic allocation strategy. On systems with heap in SPIRAM, if
+                the allocation size does not exceed SPIRAM_MALLOC_ALWAYSINTERNAL then internal
+                heap allocation if preferred, otherwise allocation will be attempted from SPIRAM
+                heap.
+
+        config LITTLEFS_MALLOC_STRATEGY_INTERNAL
+            bool "Internal heap"
+            help
+                Uses ESP-IDF heap_caps_malloc to allocate from internal heap.
+
+        config LITTLEFS_MALLOC_STRATEGY_SPIRAM
+            bool "SPIRAM heap"
+            depends on SPIRAM_USE_MALLOC && ESP32_SPIRAM_SUPPORT
+            help
+                Uses ESP-IDF heap_caps_malloc to allocate from SPIRAM heap.
+
+    endchoice
+
+    config LITTLEFS_ASSERTS
+        bool "Enable asserts"
+        default "y"
+        help
+            Selects whether littlefs performs runtime assert checks.
+
 endmenu

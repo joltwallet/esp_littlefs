@@ -12,15 +12,21 @@
 #include <stdbool.h>
 #include <string.h>
 #include <inttypes.h>
-#include "esp_heap_caps.h"
+#include "sdkconfig.h"
 #include "esp_log.h"
 
-#ifndef LFS_NO_MALLOC
+
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
 #include <stdlib.h>
+#include "esp_heap_caps.h"
 #endif
-#ifndef LFS_NO_ASSERT
+
+#ifdef CONFIG_LITTLEFS_ASSERTS
 #include <assert.h>
 #endif
+
 #if !defined(LFS_NO_DEBUG) || \
         !defined(LFS_NO_WARN) || \
         !defined(LFS_NO_ERROR) || \
@@ -81,12 +87,10 @@ extern const char ESP_LITTLEFS_TAG[];
 #endif
 
 // Runtime assertions
-#ifndef LFS_ASSERT
-#ifndef LFS_NO_ASSERT
+#ifdef CONFIG_LITTLEFS_ASSERTS
 #define LFS_ASSERT(test) assert(test)
 #else
 #define LFS_ASSERT(test)
-#endif
 #endif
 
 
@@ -207,11 +211,15 @@ static inline uint32_t lfs_tobe32(uint32_t a) {
 uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size);
 
 // Allocate memory, only used if buffers are not provided to littlefs
-// Note, memory must be 64-bit aligned
+// For the lookahead buffer, memory must be 32-bit aligned
 static inline void *lfs_malloc(size_t size) {
-#ifndef LFS_NO_MALLOC
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT)
+    return malloc(size); // Equivalent to heap_caps_malloc_default(size);
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
     return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-#else
+#elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE or not defined
     (void)size;
     return NULL;
 #endif
@@ -219,9 +227,11 @@ static inline void *lfs_malloc(size_t size) {
 
 // Deallocate memory, only used if buffers are not provided to littlefs
 static inline void lfs_free(void *p) {
-#ifndef LFS_NO_MALLOC
+#if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL) || \
+    defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
     free(p);
-#else
+#else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE or not defined
     (void)p;
 #endif
 }
