@@ -146,6 +146,10 @@ LittleFS (cache=4096):             27,709 us
 
 * A freshly formatted LittleFS will have 2 blocks in use, making it seem like 8KB are in use.
 
+* The esp32 has [flash concurrency constraints](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/spi_flash/spi_flash_concurrency.html#concurrency-constraints-for-flash-on-spi1).
+  When using UART (either for data transfer or generic logging) at the same time, you *MUST* enable the following option in KConfig:
+  `menuconfig > Component config > Driver config > UART > UART ISR in IRAM`.
+
 # Running Unit Tests
 
 To flash the unit-tester app and the unit-tests, clone or symbolicly link this
