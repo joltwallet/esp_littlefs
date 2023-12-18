@@ -1,0 +1,9 @@
+{
+  "name": "esp_littlefs",
+  "build": {
+    "srcFilter": "+<*> -<littlefs/runners> -<littlefs/benches> -<littlefs/tests>",
+    "flags": [
+      "-I ./src/littlefs/"
+    ]
+  }
+}
