@@ -25,6 +25,32 @@ git submodule update --init --recursive
 
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
+## PlatformIO
+Add to the platformio.ini file the following line:
+```lib_deps = https://github.com/EvEggelen/esp_littlefs.git```
+
+Add in the CMakeList.txt in the root directory file the following 2 lines:
+```
+cmake_minimum_required(VERSION 3.16.0)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+<b>get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")</b>
+
+project(test_littlefs)
+```
+To configure LittleFS from platformIO.
+Type inside the terminal the following command: ```~/.platformio/penv/bin/pio run -t menuconfig``` When everything is working correctly, an entry **LittleFS** is visible in the root structure.
+
+The solution is not super clean. But till the open issues are fixed, this is a workaround is an option to use.
+
+Active related issues:
+
+https://github.com/platformio/platform-espressif32/issues/479
+
+https://github.com/platformio/platform-espressif32/issues/453
+
+
 ### Example
 User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
 
