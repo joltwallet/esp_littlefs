@@ -31,17 +31,19 @@ Add to the platformio.ini file the following line:
 
 example platformio.ini file
 ```
+[env]
+platform = espressif32
+framework = espidf
+monitor_speed = 115200
+
 [common]
 ;lib_deps = https://github.com/joltwallet/esp_littlefs.git
 lib_deps = https://github.com/EvEggelen/esp_littlefs.git
 
 [env:nodemcu-32s]
-platform = espressif32
 board = nodemcu-32s
 board_build.filesystem = littlefs
 board_build.partitions = min_littlefs.csv
-framework = espidf
-monitor_speed = 115200
 lib_deps =  ${common.lib_deps}
 ```
 
@@ -56,7 +58,7 @@ littlefs, data, spiffs,   0x3D0000,0x20000,
 coredump, data, coredump, 0x3F0000,0x10000,
 ```
 
-Add in the CMakeList.txt in the root directory file the following 2 lines:
+Add in the CMakeList.txt in the root directory of the project the following 2 lines:
 ```
 cmake_minimum_required(VERSION 3.16.0)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -67,9 +69,9 @@ list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}
 project(test_littlefs)
 ```
 To configure LittleFS from platformIO.
-Type inside the terminal the following command: ```~/.platformio/penv/bin/pio run -t menuconfig``` When everything is working correctly, an entry **LittleFS** is visible in the root structure.
+Type inside the terminal the following command: ```~/.platformio/penv/bin/pio run -t menuconfig``` When everything is working correctly, an entry is visible in `Component config->LittleFS`
 
-The solution is not super clean. But till the open issues are fixed, this is a workaround is an option to use.
+At the moment it is required to modify the CMake files. But till the open issues are fixed, this is a workaround is an option to use.
 
 Active related issues:
 
