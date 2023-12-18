@@ -7,7 +7,8 @@
   "build": {
     "srcFilter": "+<*> -<littlefs/runners> -<littlefs/benches> -<littlefs/tests>",
     "flags": [
-      "-I ./src/littlefs/"
+      "-I ./src/littlefs/",
+      "-DLFS_CONFIG=lfs_config.h"
     ]
   }
 }
