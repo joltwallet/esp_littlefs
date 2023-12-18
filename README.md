@@ -58,13 +58,13 @@ littlefs, data, spiffs,   0x3D0000,0x20000,
 coredump, data, coredump, 0x3F0000,0x10000,
 ```
 
-Add in the CMakeList.txt in the root directory of the project the following 2 lines:
+Add in the CMakeList.txt in the root directory of the project the following 2 lines ( starting with get_filename and list ):
 ```
 cmake_minimum_required(VERSION 3.16.0)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
-list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")</b>
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")
 
 project(test_littlefs)
 ```
