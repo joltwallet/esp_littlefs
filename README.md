@@ -29,12 +29,39 @@ The library can be configured via `idf.py menuconfig` under `Component config->L
 Add to the platformio.ini file the following line:
 ```lib_deps = https://github.com/EvEggelen/esp_littlefs.git```
 
+example platformio.ini file
+```
+[common]
+;lib_deps = https://github.com/joltwallet/esp_littlefs.git
+lib_deps = https://github.com/EvEggelen/esp_littlefs.git
+
+[env:nodemcu-32s]
+platform = espressif32
+board = nodemcu-32s
+board_build.filesystem = littlefs
+board_build.partitions = min_littlefs.csv
+framework = espidf
+monitor_speed = 115200
+lib_deps =  ${common.lib_deps}
+```
+
+content min_littlefs.cvs file
+```
+# Name,   Type, SubType,  Offset,  Size, Flags
+nvs,      data, nvs,      0x9000,  0x5000,
+otadata,  data, ota,      0xe000,  0x2000,
+app0,     app,  ota_0,    0x10000, 0x1E0000,
+app1,     app,  ota_1,    0x1F0000,0x1E0000,
+littlefs, data, spiffs,   0x3D0000,0x20000,
+coredump, data, coredump, 0x3F0000,0x10000,
+```
+
 Add in the CMakeList.txt in the root directory file the following 2 lines:
 ```
 cmake_minimum_required(VERSION 3.16.0)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-<b>get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
+get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
 list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")</b>
 
 project(test_littlefs)
