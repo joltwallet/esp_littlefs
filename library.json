@@ -1,5 +1,6 @@
 {
   "name": "esp_littlefs",
+  "version": "0.0.0",
   "build": {
     "srcFilter": "+<*> -<littlefs/runners> -<littlefs/benches> -<littlefs/tests>",
     "flags": [
