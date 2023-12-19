@@ -8,6 +8,8 @@ because SPIFFS was too slow, and FAT was too fragile.
 
 # How to Use
 
+## ESP-IDF
+
 There are two ways to add this component to your project
 
 1. As a ESP-IDF managed component: In your project directory run
@@ -26,7 +28,7 @@ git submodule update --init --recursive
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
 ## PlatformIO
-Add to the platformio.ini file the following line:
+Add to the following line to the platformio.ini file:
 ```lib_deps = https://github.com/EvEggelen/esp_littlefs.git```
 
 example platformio.ini file
@@ -47,7 +49,7 @@ board_build.partitions = min_littlefs.csv
 lib_deps =  ${common.lib_deps}
 ```
 
-content min_littlefs.cvs file
+content file : min_littlefs.cvs
 ```
 # Name,   Type, SubType,  Offset,  Size, Flags
 nvs,      data, nvs,      0x9000,  0x5000,
@@ -58,7 +60,7 @@ littlefs, data, spiffs,   0x3D0000,0x20000,
 coredump, data, coredump, 0x3F0000,0x10000,
 ```
 
-Add in the CMakeList.txt in the root directory of the project the following 2 lines ( starting with get_filename and list ):
+Add the following 2 lines ( starting with get_filename and list ) to the CMakeList.txt present in the root directory of the project :
 ```
 cmake_minimum_required(VERSION 3.16.0)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -69,7 +71,7 @@ list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}
 project(test_littlefs)
 ```
 To configure LittleFS from platformIO.
-Type inside the terminal the following command: ```~/.platformio/penv/bin/pio run -t menuconfig``` When everything is working correctly, an entry is visible in `Component config->LittleFS`
+Type the following command inside the terminal : ```~/.platformio/penv/bin/pio run -t menuconfig```. When everything is working correctly, an entry is visible in `Component config->LittleFS`. When this does not show up, check if the changes to the CMake file are done correctly.
 
 At the moment it is required to modify the CMake files. But till the open issues are fixed, this is a workaround is an option to use.
 
