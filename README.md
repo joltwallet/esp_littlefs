@@ -27,6 +27,9 @@ git submodule update --init --recursive
 
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
+#### Example
+User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
+
 ## PlatformIO
 Add to the following line to your project's `platformio.ini` file:
 
@@ -88,10 +91,6 @@ To configure LittleFS from PlatformIO, run the following command:
 $ pio run -t menuconfig
 ```
 An entry `Component config->LittleFS` should be available for configuration. If not, check your `CMakeList.txt` configuration.
-
-
-### Example
-User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
 
 
 # Documentation
