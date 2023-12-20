@@ -28,10 +28,14 @@ git submodule update --init --recursive
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
 ## PlatformIO
-Add to the following line to the platformio.ini file:
-```lib_deps = https://github.com/EvEggelen/esp_littlefs.git```
+Add to the following line to your project's `platformio.ini` file:
 
-example platformio.ini file
+```
+lib_deps = https://github.com/joltwallet/esp_littlefs.git
+```
+
+Example `platformio.ini` file:
+
 ```
 [env]
 platform = espressif32
@@ -39,17 +43,16 @@ framework = espidf
 monitor_speed = 115200
 
 [common]
-;lib_deps = https://github.com/joltwallet/esp_littlefs.git
-lib_deps = https://github.com/EvEggelen/esp_littlefs.git
+lib_deps = https://github.com/joltwallet/esp_littlefs.git
 
 [env:nodemcu-32s]
 board = nodemcu-32s
 board_build.filesystem = littlefs
 board_build.partitions = min_littlefs.csv
-lib_deps =  ${common.lib_deps}
+lib_deps = ${common.lib_deps}
 ```
 
-content file : min_littlefs.cvs
+Example `min_littlefs.cvs` flash partition layout:
 ```
 # Name,   Type, SubType,  Offset,  Size, Flags
 nvs,      data, nvs,      0x9000,  0x5000,
@@ -60,7 +63,15 @@ littlefs, data, spiffs,   0x3D0000,0x20000,
 coredump, data, coredump, 0x3F0000,0x10000,
 ```
 
-Add the following 2 lines ( starting with get_filename and list ) to the CMakeList.txt present in the root directory of the project :
+[Currently, it is required](https://github.com/platformio/platform-espressif32/issues/479) to modify `CMakeList.txt`. Add the following 2 lines to the your project's `CMakeList.txt`:
+
+```
+get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")
+```
+
+Example `CMakeList.txt`:
+
 ```
 cmake_minimum_required(VERSION 3.16.0)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -68,18 +79,15 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
 list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")
 
-project(test_littlefs)
+project(my_project_name_here)
 ```
-To configure LittleFS from platformIO.
-Type the following command inside the terminal : ```~/.platformio/penv/bin/pio run -t menuconfig```. When everything is working correctly, an entry is visible in `Component config->LittleFS`. When this does not show up, check if the changes to the CMake file are done correctly.
 
-At the moment it is required to modify the CMake files. But till the open issues are fixed, this is a workaround is an option to use.
+To configure LittleFS from PlatformIO, run the following command:
 
-Active related issues:
-
-https://github.com/platformio/platform-espressif32/issues/479
-
-https://github.com/platformio/platform-espressif32/issues/453
+```console
+$ pio run -t menuconfig
+```
+An entry `Component config->LittleFS` should be available for configuration. If not, check your `CMakeList.txt` configuration.
 
 
 ### Example
