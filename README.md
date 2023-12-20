@@ -31,10 +31,10 @@ The library can be configured via `idf.py menuconfig` under `Component config->L
 User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
 
 ## PlatformIO
-Add to the following line to your project's `platformio.ini` file:
+Add to the following line to your project's `platformio.ini` file for using the v1.12.0 tag:
 
 ```
-lib_deps = https://github.com/joltwallet/esp_littlefs.git
+lib_deps = https://github.com/joltwallet/esp_littlefs.git#v1.12.0
 ```
 
 Example `platformio.ini` file:
@@ -85,10 +85,10 @@ list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}
 project(my_project_name_here)
 ```
 
-To configure LittleFS from PlatformIO, run the following command:
+To configure LittleFS from PlatformIO with a default install, run the following command:
 
 ```console
-$ pio run -t menuconfig
+$ ~/.platformio/penv/bin/pio run -t menuconfig
 ```
 An entry `Component config->LittleFS` should be available for configuration. If not, check your `CMakeList.txt` configuration.
 
