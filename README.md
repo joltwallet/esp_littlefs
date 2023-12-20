@@ -8,6 +8,8 @@ because SPIFFS was too slow, and FAT was too fragile.
 
 # How to Use
 
+## ESP-IDF
+
 There are two ways to add this component to your project
 
 1. As a ESP-IDF managed component: In your project directory run
@@ -25,8 +27,70 @@ git submodule update --init --recursive
 
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
-### Example
+#### Example
 User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
+
+## PlatformIO
+Add to the following line to your project's `platformio.ini` file:
+
+```
+lib_deps = https://github.com/joltwallet/esp_littlefs.git
+```
+
+Example `platformio.ini` file:
+
+```
+[env]
+platform = espressif32
+framework = espidf
+monitor_speed = 115200
+
+[common]
+lib_deps = https://github.com/joltwallet/esp_littlefs.git
+
+[env:nodemcu-32s]
+board = nodemcu-32s
+board_build.filesystem = littlefs
+board_build.partitions = min_littlefs.csv
+lib_deps = ${common.lib_deps}
+```
+
+Example `min_littlefs.cvs` flash partition layout:
+```
+# Name,   Type, SubType,  Offset,  Size, Flags
+nvs,      data, nvs,      0x9000,  0x5000,
+otadata,  data, ota,      0xe000,  0x2000,
+app0,     app,  ota_0,    0x10000, 0x1E0000,
+app1,     app,  ota_1,    0x1F0000,0x1E0000,
+littlefs, data, spiffs,   0x3D0000,0x20000,
+coredump, data, coredump, 0x3F0000,0x10000,
+```
+
+[Currently, it is required](https://github.com/platformio/platform-espressif32/issues/479) to modify `CMakeList.txt`. Add the following 2 lines to the your project's `CMakeList.txt`:
+
+```
+get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")
+```
+
+Example `CMakeList.txt`:
+
+```
+cmake_minimum_required(VERSION 3.16.0)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+get_filename_component(configName "${CMAKE_BINARY_DIR}" NAME)
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.pio/libdeps/${configName}/esp_littlefs")
+
+project(my_project_name_here)
+```
+
+To configure LittleFS from PlatformIO, run the following command:
+
+```console
+$ pio run -t menuconfig
+```
+An entry `Component config->LittleFS` should be available for configuration. If not, check your `CMakeList.txt` configuration.
 
 
 # Documentation
