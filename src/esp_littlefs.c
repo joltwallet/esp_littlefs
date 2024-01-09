@@ -719,7 +719,7 @@ static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sd
         (*efs)->cfg.prog_size = sdcard->csd.sector_size;
         (*efs)->cfg.block_size = sdcard->csd.sector_size;
         (*efs)->cfg.block_count = sdcard->csd.capacity;
-        (*efs)->cfg.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
+        (*efs)->cfg.cache_size = MAX(CONFIG_LITTLEFS_CACHE_SIZE, sdcard->csd.sector_size); // Must not be smaller than SD sector size
         (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         (*efs)->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
 #if CONFIG_LITTLEFS_MULTIVERSION
