@@ -9,7 +9,7 @@
 #include "esp_vfs.h"
 #include "esp_partition.h"
 #include "littlefs/lfs.h"
-#include <driver/sdmmc_types.h>
+#include <sdmmc_cmd.h>
 
 #ifdef __cplusplus
 extern "C" {

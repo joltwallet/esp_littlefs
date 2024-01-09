@@ -4,7 +4,7 @@
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #include <stdbool.h>
-#include <driver/sdmmc_types.h>
+#include <sdmmc_cmd.h>
 #include "esp_partition.h"
 
 #ifdef __cplusplus
