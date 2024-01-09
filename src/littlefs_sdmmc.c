@@ -8,14 +8,18 @@
 #include <sys/param.h>
 #include "littlefs_api.h"
 
+#if CONFIG_LITTLEFS_SDMMC_SUPPORT && ESP_IDF_VERSION_MAJOR < 5
+#error "SDMMC feature is only supported in ESP-IDF v5+, see: https://github.com/joltwallet/esp_littlefs/pull/170#issuecomment-1882484668"
+#endif
+
 int littlefs_sdmmc_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size)
 {
     esp_littlefs_t * efs = c->context;
-    size_t part_off = (block * c->block_size) + off;
+    uint32_t part_off = (block * c->block_size) + off;
 
     esp_err_t ret = sdmmc_read_sectors(efs->sdcard, buffer, block, MIN(size / efs->cfg.read_size, 1));
     if (ret != ESP_OK) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "failed to read addr %08x, size %08x, err=0x%x", (unsigned int) part_off, (unsigned int) size, ret);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to read addr 0x%08lx: off 0x%08lx, block 0x%08lx, size %lu, err=0x%x", part_off, off, block, size, ret);
         return LFS_ERR_IO;
     }
 
@@ -25,11 +29,11 @@ int littlefs_sdmmc_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t
 int littlefs_sdmmc_write(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size)
 {
     esp_littlefs_t * efs = c->context;
-    size_t part_off = (block * c->block_size) + off;
+    uint32_t part_off = (block * c->block_size) + off;
 
     esp_err_t ret = sdmmc_write_sectors(efs->sdcard, buffer, block, MIN(size / efs->cfg.prog_size, 1));
     if (ret != ESP_OK) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "failed to write addr %08x, size %08x, err=0x%x", (unsigned int) part_off, (unsigned int) size, ret);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to write addr 0x%08lx: off 0x%08lx, block 0x%08lx, size %lu, err=0x%x", part_off, off, block, size, ret);
         return LFS_ERR_IO;
     }
 

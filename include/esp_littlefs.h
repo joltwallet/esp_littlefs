@@ -4,8 +4,11 @@
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #include <stdbool.h>
-#include <sdmmc_cmd.h>
 #include "esp_partition.h"
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+#include <sdmmc_cmd.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +30,11 @@ typedef struct {
     const char *base_path;            /**< Mounting point. */
     const char *partition_label;      /**< Label of partition to use. */
     const esp_partition_t* partition; /**< partition to use if partition_label is NULL */
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     sdmmc_card_t *sdcard;       /**< SD card handle to use if both esp_partition handle & partition label is NULL */
+#endif
+
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
     uint8_t read_only : 1;            /**< Mount the partition as read-only. */
     uint8_t dont_mount:1;             /**< Don't attempt to mount.*/

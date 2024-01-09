@@ -9,7 +9,11 @@
 #include "esp_vfs.h"
 #include "esp_partition.h"
 #include "littlefs/lfs.h"
+#include <sdkconfig.h>
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,7 +50,11 @@ typedef struct _vfs_littlefs_file_t {
 typedef struct {
     lfs_t *fs;                                /*!< Handle to the underlying littlefs */
     SemaphoreHandle_t lock;                   /*!< FS lock */
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     sdmmc_card_t *sdcard;                     /*!< The SD card driver handle on which littlefs is located */
+#endif
+
     const esp_partition_t* partition;         /*!< The partition on which littlefs is located */
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
 
@@ -102,6 +110,8 @@ int littlefs_esp_part_erase(const struct lfs_config *c, lfs_block_t block);
  */
 int littlefs_esp_part_sync(const struct lfs_config *c);
 
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+
 /**
  * @brief Read a region in a block on SD card
  *
@@ -143,6 +153,8 @@ int littlefs_sdmmc_erase(const struct lfs_config *c, lfs_block_t block);
  * @return errorcode. 0 on success.
  */
 int littlefs_sdmmc_sync(const struct lfs_config *c);
+
+#endif // CONFIG_LITTLEFS_SDMMC_SUPPORT
 
 #ifdef __cplusplus
 }

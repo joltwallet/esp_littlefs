@@ -23,7 +23,10 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
+#endif
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "spi_flash_mmap.h"
@@ -694,6 +697,8 @@ static void esp_littlefs_take_efs_lock(void) {
     xSemaphoreTake(_efs_lock, portMAX_DELAY);
 }
 
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sdcard, bool read_only)
 {
     /* Allocate Context */
@@ -749,6 +754,7 @@ static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sd
 
     return ESP_OK;
 }
+#endif // CONFIG_LITTLEFS_SDMMC_SUPPORT
 
 static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition_t* partition, bool read_only)
 {
@@ -850,6 +856,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             goto exit;
         }
         partition = conf->partition;
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     } else if (conf->sdcard) {
         ESP_LOGI(ESP_LITTLEFS_TAG, "Using SD card handle %p for LittleFS mount", conf->sdcard);
         err = sdmmc_get_status(conf->sdcard);
@@ -857,18 +864,26 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed when checking SD card status: 0x%x", err);
             goto exit;
         }
+#endif
     } else {
         ESP_LOGE(ESP_LITTLEFS_TAG, "No partition specified in configuration");
         err = ESP_ERR_INVALID_ARG;
         goto exit;
     }
 
-	if (!conf->sdcard) {
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+	if (conf->sdcard) {
+        err = esp_littlefs_init_sdcard(&efs, conf->sdcard, conf->read_only);
+        if(err != ESP_OK) {
+            goto exit;
+        }
+    } else {
+#endif
         uint32_t flash_page_size = g_rom_flashchip.page_size;
         uint32_t log_page_size = CONFIG_LITTLEFS_PAGE_SIZE;
         if (log_page_size % flash_page_size != 0) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "LITTLEFS_PAGE_SIZE is not multiple of flash chip page size (%u)",
-                    (unsigned int) flash_page_size);
+                     (unsigned int) flash_page_size);
             err = ESP_ERR_INVALID_ARG;
             goto exit;
         }
@@ -878,12 +893,10 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         if(err != ESP_OK) {
             goto exit;
         }
-    } else {
-        err = esp_littlefs_init_sdcard(&efs, conf->sdcard, conf->read_only);
-        if(err != ESP_OK) {
-            goto exit;
-        }
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     }
+#endif
 
     // Mount and Error Check
     _efs[index] = efs;

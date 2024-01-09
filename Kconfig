@@ -1,5 +1,12 @@
 menu "LittleFS"
 
+    config LITTLEFS_SDMMC_SUPPORT
+        bool "SDMMC support (requires ESP-IDF v5+)"
+        default n
+        help
+            Toggle SD card support
+            This requires IDF v5+ as older ESP-IDF do not support SD card erase.
+
     config LITTLEFS_MAX_PARTITIONS
         int "Maximum Number of Partitions"
         default 3
