@@ -23,6 +23,7 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include <sdmmc_cmd.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "spi_flash_mmap.h"
@@ -693,6 +694,62 @@ static void esp_littlefs_take_efs_lock(void) {
     xSemaphoreTake(_efs_lock, portMAX_DELAY);
 }
 
+static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sdcard, bool read_only)
+{
+    /* Allocate Context */
+    *efs = esp_littlefs_calloc(1, sizeof(esp_littlefs_t));
+    if (*efs == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "esp_littlefs could not be malloced");
+        return ESP_ERR_NO_MEM;
+    }
+    (*efs)->sdcard = sdcard;
+
+    { /* LittleFS Configuration */
+        (*efs)->cfg.context = *efs;
+        (*efs)->read_only = read_only;
+
+        // block device operations
+        (*efs)->cfg.read  = littlefs_sdmmc_read;
+        (*efs)->cfg.prog  = littlefs_sdmmc_write;
+        (*efs)->cfg.erase = littlefs_sdmmc_erase;
+        (*efs)->cfg.sync  = littlefs_sdmmc_sync;
+
+        // block device configuration
+        (*efs)->cfg.read_size = sdcard->csd.sector_size;
+        (*efs)->cfg.prog_size = sdcard->csd.sector_size;
+        (*efs)->cfg.block_size = sdcard->csd.sector_size;
+        (*efs)->cfg.block_count = sdcard->csd.capacity;
+        (*efs)->cfg.cache_size = CONFIG_LITTLEFS_CACHE_SIZE;
+        (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
+        (*efs)->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
+#if CONFIG_LITTLEFS_MULTIVERSION
+        #if CONFIG_LITTLEFS_DISK_VERSION_MOST_RECENT
+        (*efs)->cfg.disk_version = 0;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_1
+        (*efs)->cfg.disk_version = 0x00020001;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_0
+        (*efs)->cfg.disk_version = 0x00020000;
+#else
+#error "CONFIG_LITTLEFS_MULTIVERSION enabled but no or unknown disk version selected!"
+#endif
+#endif
+    }
+
+    (*efs)->lock = xSemaphoreCreateRecursiveMutex();
+    if ((*efs)->lock == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "mutex lock could not be created");
+        return ESP_ERR_NO_MEM;
+    }
+
+    (*efs)->fs = esp_littlefs_calloc(1, sizeof(lfs_t));
+    if ((*efs)->fs == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "littlefs could not be malloced");
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
 static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition_t* partition, bool read_only)
 {
     /* Allocate Context */
@@ -708,10 +765,10 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
         (*efs)->read_only = read_only;
 
         // block device operations
-        (*efs)->cfg.read  = littlefs_api_read;
-        (*efs)->cfg.prog  = littlefs_api_prog;
-        (*efs)->cfg.erase = littlefs_api_erase;
-        (*efs)->cfg.sync  = littlefs_api_sync;
+        (*efs)->cfg.read  = littlefs_esp_part_read;
+        (*efs)->cfg.prog  = littlefs_esp_part_write;
+        (*efs)->cfg.erase = littlefs_esp_part_erase;
+        (*efs)->cfg.sync  = littlefs_esp_part_sync;
 
         // block device configuration
         (*efs)->cfg.read_size = CONFIG_LITTLEFS_READ_SIZE;
@@ -793,12 +850,20 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             goto exit;
         }
         partition = conf->partition;
+    } else if (conf->sdcard) {
+        ESP_LOGI(ESP_LITTLEFS_TAG, "Using SD card handle %p for LittleFS mount", conf->sdcard);
+        err = sdmmc_get_status(conf->sdcard);
+        if (err != ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Failed when checking SD card status: 0x%x", err);
+            goto exit;
+        }
     } else {
         ESP_LOGE(ESP_LITTLEFS_TAG, "No partition specified in configuration");
         err = ESP_ERR_INVALID_ARG;
         goto exit;
     }
-	{
+
+	if (!conf->sdcard) {
         uint32_t flash_page_size = g_rom_flashchip.page_size;
         uint32_t log_page_size = CONFIG_LITTLEFS_PAGE_SIZE;
         if (log_page_size % flash_page_size != 0) {
@@ -807,11 +872,17 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             err = ESP_ERR_INVALID_ARG;
             goto exit;
         }
-    }
-    err = esp_littlefs_init_efs(&efs, partition, conf->read_only);
 
-    if(err != ESP_OK) {
-        goto exit;
+        err = esp_littlefs_init_efs(&efs, partition, conf->read_only);
+
+        if(err != ESP_OK) {
+            goto exit;
+        }
+    } else {
+        err = esp_littlefs_init_sdcard(&efs, conf->sdcard, conf->read_only);
+        if(err != ESP_OK) {
+            goto exit;
+        }
     }
 
     // Mount and Error Check
@@ -822,7 +893,6 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         res = lfs_mount(efs->fs, &efs->cfg);
 
         if (conf->format_if_mount_failed && res != LFS_ERR_OK) {
-            esp_err_t err;
             ESP_LOGW(ESP_LITTLEFS_TAG, "mount failed, %s (%i). formatting...", esp_littlefs_errno(res), res);
             err = esp_littlefs_format_partition(efs->partition);
 

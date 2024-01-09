@@ -4,6 +4,7 @@
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #include <stdbool.h>
+#include <driver/sdmmc_types.h>
 #include "esp_partition.h"
 
 #ifdef __cplusplus
@@ -26,6 +27,7 @@ typedef struct {
     const char *base_path;            /**< Mounting point. */
     const char *partition_label;      /**< Label of partition to use. */
     const esp_partition_t* partition; /**< partition to use if partition_label is NULL */
+    sdmmc_card_t *sdcard;       /**< SD card handle to use if both esp_partition handle & partition label is NULL */
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
     uint8_t read_only : 1;            /**< Mount the partition as read-only. */
     uint8_t dont_mount:1;             /**< Don't attempt to mount.*/
