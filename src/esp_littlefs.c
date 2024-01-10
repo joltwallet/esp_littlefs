@@ -118,7 +118,10 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int*index);
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index);
+#endif
 
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
