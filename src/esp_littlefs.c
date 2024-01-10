@@ -749,25 +749,23 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index)
 {
-    int i;
-    esp_littlefs_t * p;
-
     if(!handle || !index) return ESP_ERR_INVALID_ARG;
 
     ESP_LOGV(ESP_LITTLEFS_TAG, "Searching for existing filesystem for SD handle %p", handle);
 
-    for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
-        p = _efs[i];
-        if (p && p->sdcard) {
+    for (int i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
+        esp_littlefs_t *p = _efs[i];
+        if (!p) continue;
+        if (p->sdcard) {
             if (p->sdcard == handle) {
                 *index = i;
-                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", p->sdcard, *index);
+                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", handle, *index);
                 return ESP_OK;
             }
         }
     }
 
-    ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem %p not found", p->sdcard);
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem %p not found", handle);
     return ESP_ERR_NOT_FOUND;
 }
 #endif
