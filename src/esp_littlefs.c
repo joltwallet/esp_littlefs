@@ -226,6 +226,19 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
         esp_littlefs_free_fds(efs);
     }
 
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+    /* Format the SD card too */
+    if (efs->sdcard) {
+        esp_err_t ret = sdmmc_full_erase(efs->sdcard);
+        if (ret != ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to format SD card: 0x%x %s", ret, esp_err_to_name(ret));
+            return ret;
+        }
+
+        ESP_LOGI(ESP_LITTLEFS_TAG, "SD card formatted!");
+    }
+#endif
+
     /* Format */
     {
         int res;
