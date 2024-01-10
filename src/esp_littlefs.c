@@ -118,6 +118,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int*index);
+static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index);
 
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
@@ -241,13 +242,23 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
 
     /* Format */
     {
-        int res;
+        esp_err_t res = ESP_OK;
         ESP_LOGV(ESP_LITTLEFS_TAG, "Formatting filesystem");
 
-        /* Need to write explicit block_count to cfg */
+        /* Need to write explicit block_count to cfg; but skip if it's the SD card */
+#ifndef CONFIG_LITTLEFS_SDMMC_SUPPORT
         efs->cfg.block_count = efs->partition->size / efs->cfg.block_size;
         res = lfs_format(efs->fs, &efs->cfg);
         efs->cfg.block_count = 0;
+#else
+        if (efs->sdcard) {
+            res = lfs_format(efs->fs, &efs->cfg);
+        } else {
+            efs->cfg.block_count = efs->partition->size / efs->cfg.block_size;
+            res = lfs_format(efs->fs, &efs->cfg);
+            efs->cfg.block_count = 0;
+        }
+#endif
 
         if( res != LFS_ERR_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to format filesystem");
@@ -340,8 +351,17 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
     }
 
     int index;
-    if(conf->partition_label)
-    {
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+    if (conf->sdcard) {
+        if (esp_littlefs_by_sdmmc_handle(conf->sdcard, &index) != ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Unable to find SD card \"%p\"", conf->sdcard);
+            return ESP_ERR_NOT_FOUND;
+        }
+    } else if(conf->partition_label) {
+#else
+    if(conf->partition_label) {
+#endif
         if (esp_littlefs_by_label(conf->partition_label, &index) != ESP_OK) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Unable to find partition \"%s\"", conf->partition_label);
             return ESP_ERR_NOT_FOUND;
@@ -383,6 +403,29 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
     _efs[index] = NULL;
     return ESP_OK;
 }
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+esp_err_t esp_vfs_littlefs_unregister_sdmmc(sdmmc_card_t *sdcard)
+{
+    assert(sdcard);
+    int index;
+    if (esp_littlefs_by_sdmmc_handle(sdcard, &index) != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Partition was never registered.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Unregistering SD card \"%p\"", sdcard);
+    esp_err_t err = esp_vfs_unregister(_efs[index]->base_path);
+    if (err != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to unregister SD card \"%p\"", sdcard);
+        return err;
+    }
+
+    esp_littlefs_free(&_efs[index]);
+    _efs[index] = NULL;
+    return ESP_OK;
+}
+#endif
 
 esp_err_t esp_vfs_littlefs_unregister_partition(const esp_partition_t* partition) {
     assert(partition);
@@ -484,6 +527,53 @@ exit:
     if(efs_free && index>=0) esp_littlefs_free(&_efs[index]);
     return err;
 }
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+esp_err_t esp_littlefs_format_sdmmc(sdmmc_card_t *sdcard)
+{
+    assert(sdcard);
+
+    bool efs_free = false;
+    int index = -1;
+    esp_err_t err;
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Formatting sdcard %p", sdcard);
+
+    /* Get a context */
+    err = esp_littlefs_by_sdmmc_handle(sdcard, &index);
+
+    if( err != ESP_OK ){
+        /* Create a tmp context */
+        ESP_LOGV(ESP_LITTLEFS_TAG, "Temporarily creating EFS context.");
+        efs_free = true;
+        const esp_vfs_littlefs_conf_t conf = {
+                /* base_name not necessary for initializing */
+                .dont_mount = true,
+                .partition_label = NULL,
+                .partition = NULL,
+                .sdcard = sdcard,
+        };
+
+        err = esp_littlefs_init(&conf);
+        if( err != ESP_OK ) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
+            goto exit;
+        }
+
+        err = esp_littlefs_by_sdmmc_handle(sdcard, &index);
+        if ( err != ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Error obtaining context.");
+            goto exit;
+        }
+    }
+
+    err = format_from_efs(_efs[index]);
+
+exit:
+    if(efs_free && index>=0) esp_littlefs_free(&_efs[index]);
+    return err;
+}
+#endif
 
 /********************
  * Static Functions *
@@ -655,6 +745,32 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
     ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem \"%s\" not found", label);
     return ESP_ERR_NOT_FOUND;
 }
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index)
+{
+    int i;
+    esp_littlefs_t * p;
+
+    if(!handle || !index) return ESP_ERR_INVALID_ARG;
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Searching for existing filesystem for SD handle %p", handle);
+
+    for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
+        p = _efs[i];
+        if (p && p->sdcard) {
+            if (p->sdcard == handle) {
+                *index = i;
+                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", p->sdcard, *index);
+                return ESP_OK;
+            }
+        }
+    }
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem %p not found", p->sdcard);
+    return ESP_ERR_NOT_FOUND;
+}
+#endif
 
 /**
  * @brief Get the index of an unallocated LittleFS slot.
@@ -920,8 +1036,15 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
 
         if (conf->format_if_mount_failed && res != LFS_ERR_OK) {
             ESP_LOGW(ESP_LITTLEFS_TAG, "mount failed, %s (%i). formatting...", esp_littlefs_errno(res), res);
+#ifndef CONFIG_LITTLEFS_SDMMC_SUPPORT
             err = esp_littlefs_format_partition(efs->partition);
-
+#else
+            if (conf->sdcard) {
+                err = esp_littlefs_format_sdmmc(conf->sdcard);
+            } else {
+                err = esp_littlefs_format_partition(efs->partition);
+            }
+#endif
             if(err != ESP_OK) {
                 ESP_LOGE(ESP_LITTLEFS_TAG, "format failed");
                 err = ESP_FAIL;
@@ -938,7 +1061,15 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         efs->cache = esp_littlefs_calloc(sizeof(*efs->cache), efs->cache_size);
 
         if(conf->grow_on_mount){
+#ifndef CONFIG_LITTLEFS_SDMMC_SUPPORT
             res = lfs_fs_grow(efs->fs, efs->partition->size / efs->cfg.block_size);
+#else
+            if (efs->sdcard) {
+                res = lfs_fs_grow(efs->fs, efs->sdcard->csd.capacity);
+            } else {
+                res = lfs_fs_grow(efs->fs, efs->partition->size / efs->cfg.block_size);
+            }
+#endif
             if (res != LFS_ERR_OK) {
                 ESP_LOGE(ESP_LITTLEFS_TAG, "FS grow failed, %s (%i)", esp_littlefs_errno(res), res);
                 err = ESP_FAIL;
