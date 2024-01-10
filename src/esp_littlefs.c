@@ -320,6 +320,17 @@ bool esp_littlefs_partition_mounted(const esp_partition_t* partition) {
     return _efs[index]->cache_size > 0;
 }
 
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+bool esp_littlefs_sdmmc_mounted(sdmmc_card_t *sdcard)
+{
+    int index;
+    esp_err_t err = esp_littlefs_by_sdmmc_handle(sdcard, &index);
+
+    if(err != ESP_OK) return false;
+    return _efs[index]->cache_size > 0;
+}
+#endif
+
 esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, size_t *used_bytes){
     int index;
     esp_err_t err;
@@ -342,6 +353,7 @@ esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *
     return ESP_OK;
 }
 
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, size_t *used_bytes)
 {
     int index;
@@ -353,6 +365,7 @@ esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, siz
 
     return ESP_OK;
 }
+#endif
 
 esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 {

@@ -112,6 +112,19 @@ bool esp_littlefs_mounted(const char* partition_label);
  */
 bool esp_littlefs_partition_mounted(const esp_partition_t* partition);
 
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+/**
+ * Check if littlefs is mounted
+ *
+ * @param sdcard  SD card to check.
+ *
+ * @return
+ *          - true    if mounted
+ *          - false   if not mounted
+ */
+bool esp_littlefs_sdmmc_mounted(sdmmc_card_t *sdcard);
+#endif
+
 /**
  * Format the littlefs partition
  *
