@@ -8,15 +8,11 @@ if(CONFIG_LITTLEFS_SDMMC_SUPPORT)
 endif()
 
 if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
-    if (CONFIG_LITTLEFS_SDMMC_SUPPORT)
-        list(APPEND pub_requires esp_partition sdmmc)
-    else()
-        list(APPEND pub_requires esp_partition sdmmc)
-    endif()
+    list(APPEND pub_requires esp_partition)
 else()
     list(APPEND pub_requires spi_flash)
 endif()
-list(APPEND priv_requires esptool_py spi_flash vfs)
+list(APPEND priv_requires esptool_py spi_flash vfs sdmmc)
 
 idf_component_register(
     SRCS ${SOURCES}
