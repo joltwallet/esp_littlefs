@@ -70,7 +70,7 @@ esp_err_t esp_vfs_littlefs_unregister(const char* partition_label);
 /**
  * Unregister and unmount LittleFS from VFS for SD card
  *
- * @param partition_label  Label of the partition to unregister.
+ * @param sdcard  SD card to unregister.
  *
  * @return
  *          - ESP_OK if successful
@@ -136,7 +136,7 @@ esp_err_t esp_littlefs_format_partition(const esp_partition_t* partition);
 /**
  * Format the LittleFS on a SD card
  *
- * @param partition  partition to format.
+ * @param sdcard SD card to format
  * @return
  *          - ESP_OK      if successful
  *          - ESP_FAIL    on error
@@ -169,6 +169,21 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t* total_bytes, si
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
 esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *total_bytes, size_t *used_bytes);
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+/**
+ * Get information for littlefs on SD card
+ *
+ * @param[in] sdcard                    the SD card to get info for.
+ * @param[out] total_bytes          Size of the file system
+ * @param[out] used_bytes           Current used bytes in the file system
+ *
+ * @return
+ *          - ESP_OK                  if success
+ *          - ESP_ERR_INVALID_STATE   if not mounted
+ */
+esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, size_t *used_bytes);
+#endif
 
 #ifdef __cplusplus
 } // extern "C"
