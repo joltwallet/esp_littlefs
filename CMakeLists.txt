@@ -1,14 +1,18 @@
 cmake_minimum_required(VERSION 3.10)
 
 file(GLOB SOURCES src/littlefs/*.c)
-list(APPEND SOURCES src/esp_littlefs.c src/littlefs_api.c src/lfs_config.c)
+list(APPEND SOURCES src/esp_littlefs.c src/littlefs_esp_part.c src/lfs_config.c)
+
+if(CONFIG_LITTLEFS_SDMMC_SUPPORT)
+    list(APPEND SOURCES src/littlefs_sdmmc.c)
+endif()
 
 if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
     list(APPEND pub_requires esp_partition)
 else()
     list(APPEND pub_requires spi_flash)
 endif()
-list(APPEND priv_requires esptool_py spi_flash vfs)
+list(APPEND priv_requires esptool_py spi_flash vfs sdmmc)
 
 idf_component_register(
     SRCS ${SOURCES}

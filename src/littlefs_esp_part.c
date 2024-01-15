@@ -14,8 +14,8 @@
 #include "littlefs_api.h"
 
 
-int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
-        lfs_off_t off, void *buffer, lfs_size_t size) {
+int littlefs_esp_part_read(const struct lfs_config *c, lfs_block_t block,
+                           lfs_off_t off, void *buffer, lfs_size_t size) {
     esp_littlefs_t * efs = c->context;
     size_t part_off = (block * c->block_size) + off;
     esp_err_t err = esp_partition_read(efs->partition, part_off, buffer, size);
@@ -26,8 +26,8 @@ int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
     return 0;
 }
 
-int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
-        lfs_off_t off, const void *buffer, lfs_size_t size) {
+int littlefs_esp_part_write(const struct lfs_config *c, lfs_block_t block,
+                            lfs_off_t off, const void *buffer, lfs_size_t size) {
     esp_littlefs_t * efs = c->context;
     size_t part_off = (block * c->block_size) + off;
     esp_err_t err = esp_partition_write(efs->partition, part_off, buffer, size);
@@ -38,7 +38,7 @@ int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
     return 0;
 }
 
-int littlefs_api_erase(const struct lfs_config *c, lfs_block_t block) {
+int littlefs_esp_part_erase(const struct lfs_config *c, lfs_block_t block) {
     esp_littlefs_t * efs = c->context;
     size_t part_off = block * c->block_size;
     esp_err_t err = esp_partition_erase_range(efs->partition, part_off, c->block_size);
@@ -50,7 +50,7 @@ int littlefs_api_erase(const struct lfs_config *c, lfs_block_t block) {
 
 }
 
-int littlefs_api_sync(const struct lfs_config *c) {
+int littlefs_esp_part_sync(const struct lfs_config *c) {
     /* Unnecessary for esp-idf */
     return 0;
 }

@@ -9,6 +9,11 @@
 #include "esp_vfs.h"
 #include "esp_partition.h"
 #include "littlefs/lfs.h"
+#include <sdkconfig.h>
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+#include <sdmmc_cmd.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +50,11 @@ typedef struct _vfs_littlefs_file_t {
 typedef struct {
     lfs_t *fs;                                /*!< Handle to the underlying littlefs */
     SemaphoreHandle_t lock;                   /*!< FS lock */
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+    sdmmc_card_t *sdcard;                     /*!< The SD card driver handle on which littlefs is located */
+#endif
+
     const esp_partition_t* partition;         /*!< The partition on which littlefs is located */
     char base_path[ESP_VFS_PATH_MAX+1];       /*!< Mount point */
 
@@ -65,8 +75,8 @@ typedef struct {
  *
  * @return errorcode. 0 on success.
  */
-int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
-        lfs_off_t off, void *buffer, lfs_size_t size);
+int littlefs_esp_part_read(const struct lfs_config *c, lfs_block_t block,
+                           lfs_off_t off, void *buffer, lfs_size_t size);
 
 /**
  * @brief Program a region in a block.
@@ -77,8 +87,8 @@ int littlefs_api_read(const struct lfs_config *c, lfs_block_t block,
  *
  * @return errorcode. 0 on success.
  */
-int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
-        lfs_off_t off, const void *buffer, lfs_size_t size);
+int littlefs_esp_part_write(const struct lfs_config *c, lfs_block_t block,
+                            lfs_off_t off, const void *buffer, lfs_size_t size);
 
 /**
  * @brief Erase a block.
@@ -89,7 +99,7 @@ int littlefs_api_prog(const struct lfs_config *c, lfs_block_t block,
  * May return LFS_ERR_CORRUPT if the block should be considered bad.
  * @return errorcode. 0 on success.
  */
-int littlefs_api_erase(const struct lfs_config *c, lfs_block_t block);
+int littlefs_esp_part_erase(const struct lfs_config *c, lfs_block_t block);
 
 /**
  * @brief Sync the state of the underlying block device.
@@ -98,7 +108,53 @@ int littlefs_api_erase(const struct lfs_config *c, lfs_block_t block);
  *
  * @return errorcode. 0 on success.
  */
-int littlefs_api_sync(const struct lfs_config *c);
+int littlefs_esp_part_sync(const struct lfs_config *c);
+
+#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
+
+/**
+ * @brief Read a region in a block on SD card
+ *
+ * Negative error codes are propogated to the user.
+ *
+ * @return errorcode. 0 on success.
+ */
+int littlefs_sdmmc_read(const struct lfs_config *c, lfs_block_t block,
+                           lfs_off_t off, void *buffer, lfs_size_t size);
+
+/**
+ * @brief Program a region in a block on SD card.
+ *
+ * The block must have previously been erased.
+ * Negative error codes are propogated to the user.
+ * May return LFS_ERR_CORRUPT if the block should be considered bad.
+ *
+ * @return errorcode. 0 on success.
+ */
+int littlefs_sdmmc_write(const struct lfs_config *c, lfs_block_t block,
+                            lfs_off_t off, const void *buffer, lfs_size_t size);
+
+/**
+ * @brief Erase a block on SD card.
+ *
+ * A block must be erased before being programmed.
+ * The state of an erased block is undefined.
+ * Negative error codes are propogated to the user.
+ * May return LFS_ERR_CORRUPT if the block should be considered bad.
+ * @return errorcode. 0 on success.
+ */
+int littlefs_sdmmc_erase(const struct lfs_config *c, lfs_block_t block);
+
+/**
+ * @brief Sync the state of the underlying SD card.
+ *
+ * Negative error codes are propogated to the user.
+ *
+ * @return errorcode. 0 on success.
+ */
+int littlefs_sdmmc_sync(const struct lfs_config *c);
+
+#endif // CONFIG_LITTLEFS_SDMMC_SUPPORT
 
 #ifdef __cplusplus
 }
