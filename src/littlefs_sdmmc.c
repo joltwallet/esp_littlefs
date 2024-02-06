@@ -8,9 +8,11 @@
 #include <sys/param.h>
 #include "littlefs_api.h"
 
-#if CONFIG_LITTLEFS_SDMMC_SUPPORT && ESP_IDF_VERSION_MAJOR < 5
+#if CONFIG_LITTLEFS_SDMMC_SUPPORT
+
+#if ESP_IDF_VERSION_MAJOR < 5
 #error "SDMMC feature is only supported in ESP-IDF v5+, see: https://github.com/joltwallet/esp_littlefs/pull/170#issuecomment-1882484668"
-#endif
+#else
 
 int littlefs_sdmmc_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size)
 {
@@ -56,3 +58,6 @@ int littlefs_sdmmc_sync(const struct lfs_config *c)
 {
     return LFS_ERR_OK; // Doesn't require & doesn't support sync
 }
+#endif
+
+#endif
