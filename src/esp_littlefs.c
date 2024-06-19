@@ -1020,7 +1020,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         partition = conf->partition;
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     } else if (conf->sdcard) {
-        ESP_LOGI(ESP_LITTLEFS_TAG, "Using SD card handle %p for LittleFS mount", conf->sdcard);
+        ESP_LOGV(ESP_LITTLEFS_TAG, "Using SD card handle %p for LittleFS mount", conf->sdcard);
         err = sdmmc_get_status(conf->sdcard);
         if (err != ESP_OK) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed when checking SD card status: 0x%x", err);
