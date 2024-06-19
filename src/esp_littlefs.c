@@ -735,12 +735,12 @@ static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int * in
 
     for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
         p = _efs[i];
-        if (p) {
-            if (part->address == p->partition->address) {
-                *index = i;
-                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem \"0x%08"PRIX32"\" at index %d", part->address, *index);
-                return ESP_OK;
-            }
+        if (!p) continue;
+        if (!p->partition) continue;
+        if (part->address == p->partition->address) {
+            *index = i;
+            ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem \"0x%08"PRIX32"\" at index %d", part->address, *index);
+            return ESP_OK;
         }
     }
 
@@ -758,12 +758,12 @@ static esp_err_t esp_littlefs_by_label(const char* label, int * index){
 
     for (i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
         p = _efs[i];
-        if (p) {
-            if (strncmp(label, p->partition->label, 17) == 0) {
-                *index = i;
-                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem \"%s\" at index %d", label, *index);
-                return ESP_OK;
-            }
+        if (!p) continue;
+        if (!p->partition) continue;
+        if (strncmp(label, p->partition->label, 17) == 0) {
+            *index = i;
+            ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem \"%s\" at index %d", label, *index);
+            return ESP_OK;
         }
     }
 
@@ -781,12 +781,11 @@ static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index)
     for (int i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
         esp_littlefs_t *p = _efs[i];
         if (!p) continue;
-        if (p->sdcard) {
-            if (p->sdcard == handle) {
-                *index = i;
-                ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", handle, *index);
-                return ESP_OK;
-            }
+        if (!p->sdcard) continue;
+        if (p->sdcard == handle) {
+            *index = i;
+            ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", handle, *index);
+            return ESP_OK;
         }
     }
 
