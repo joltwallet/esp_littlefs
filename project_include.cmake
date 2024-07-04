@@ -44,13 +44,32 @@ function(littlefs_create_partition_image partition base_dir)
 			)
 		endif()
 
+		file(WRITE ${CMAKE_BINARY_DIR}/parse_littlefs_version.cmake "
+file(READ \${INPUT_FILE} littlefs_version_output)
+string(REGEX MATCH \"[0-9]+\\\\.[0-9]+\" littlefs_version_number \"\${littlefs_version_output}\")
+string(REPLACE \".\" \";\" version_list \${littlefs_version_number})
+list(GET version_list 0 major_version)
+list(GET version_list 1 minor_version)
+if(\${major_version} EQUAL 0 AND \${minor_version} LESS 11)
+	set(create_fs_command \"${littlefs_py} create ${base_dir_full_path} --image=${image_file} -v --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096\")
+else()
+	set(create_fs_command \"${littlefs_py} create ${base_dir_full_path} ${image_file} -v --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096\")
+endif()
+file(WRITE ${CMAKE_BINARY_DIR}/create_fs_command.txt \"\${create_fs_command}\")
+")
+		add_custom_command(
+			OUTPUT ${CMAKE_BINARY_DIR}/create_fs_command.txt
+			COMMAND ${littlefs_py} --version > ${CMAKE_BINARY_DIR}/littlefs_version.txt
+			COMMAND ${CMAKE_COMMAND} -DINPUT_FILE=${CMAKE_BINARY_DIR}/littlefs_version.txt -P ${CMAKE_BINARY_DIR}/parse_littlefs_version.cmake
+			DEPENDS ${littlefs_py_venv}
+		)
 		# Execute LittleFS image generation; this always executes as there is no way to specify for CMake to watch for
 		# contents of the base dir changing.
 
 		add_custom_target(littlefs_${partition}_bin ALL
-			COMMAND ${littlefs_py} create ${base_dir_full_path} -v --image=${image_file} --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096
-			DEPENDS ${arg_DEPENDS} ${littlefs_py_venv}
-			)
+			COMMAND ${create_fs_command}
+			DEPENDS ${arg_DEPENDS} ${littlefs_py_venv} ${CMAKE_BINARY_DIR}/create_fs_command.txt
+		)
 
 		set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY
 			ADDITIONAL_MAKE_CLEAN_FILES
