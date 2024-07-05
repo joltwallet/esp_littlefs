@@ -48,7 +48,7 @@ function(littlefs_create_partition_image partition base_dir)
 		# contents of the base dir changing.
 
 		add_custom_target(littlefs_${partition}_bin ALL
-			COMMAND ${littlefs_py} create ${base_dir_full_path} -v --image=${image_file} --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096
+			COMMAND ${littlefs_py} create ${base_dir_full_path} ${image_file} -v --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096
 			DEPENDS ${arg_DEPENDS} ${littlefs_py_venv}
 			)
 
