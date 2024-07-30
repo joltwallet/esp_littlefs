@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["v4.4", "v5.0", "v5.1", "latest"]
+        idf_ver: ["v4.4", "v5.0", "v5.1", "v5.2", "v5.3", "latest"]
         idf_target: ["esp32"]
         include:
           - idf_ver: "v4.4"
