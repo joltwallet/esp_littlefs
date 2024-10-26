@@ -113,8 +113,10 @@ Slight differences between this configuration and SPIFFS's configuration is in t
 At compile time, a filesystem image can be created and flashed to the device by adding the following to your project's `CMakeLists.txt` file:
 
 ```
-littlefs_create_partition_image(partition_name path_to_folder_containing_files)
+littlefs_create_partition_image(partition_name path_to_folder_containing_files FLASH_IN_PROJECT)
 ```
+
+If `FLASH_IN_PROJECT` is not specified, the image will still be generated, but you will have to flash it manually using `esptool.py`, `parttool.py`, or a custom build system target.
 
 For example, if your partition table looks like:
 
@@ -126,12 +128,11 @@ factory,  app,  factory,  0x10000, 1M,
 graphics,  data, spiffs,         ,  0xF0000, 
 ```
 
-and your project has a folder called `device_graphics`, your call should be:
+and your project has a folder called `device_graphics/`, your call should be:
 
 ```
-littlefs_create_partition_image(graphics device_graphics)
+littlefs_create_partition_image(graphics device_graphics FLASH_IN_PROJECT)
 ```
-
 
 
 # Performance
