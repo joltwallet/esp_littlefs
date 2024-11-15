@@ -88,7 +88,9 @@ static ssize_t   vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, o
 static int       vfs_littlefs_close(void* ctx, int fd);
 static off_t     vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode);
 static int       vfs_littlefs_fsync(void* ctx, int fd);
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 static esp_vfs_t vfs_littlefs_create_struct(bool writeable);
+#endif // ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 
 #ifdef CONFIG_VFS_SUPPORT_DIR
 static int     vfs_littlefs_stat(void* ctx, const char * path, struct stat * st);
@@ -364,10 +366,58 @@ esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, siz
 }
 #endif
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+
+#ifdef CONFIG_VFS_SUPPORT_DIR
+static esp_vfs_dir_ops_t s_vfs_littlefs_dir = {
+    .stat_p      = &vfs_littlefs_stat,
+    .link_p      = NULL, /* Not Supported */
+    .unlink_p    = &vfs_littlefs_unlink,
+    .rename_p    = &vfs_littlefs_rename,
+    .opendir_p   = &vfs_littlefs_opendir,
+    .readdir_p   = &vfs_littlefs_readdir,
+    .readdir_r_p = &vfs_littlefs_readdir_r,
+    .telldir_p   = &vfs_littlefs_telldir,
+    .seekdir_p   = &vfs_littlefs_seekdir,
+    .closedir_p  = &vfs_littlefs_closedir,
+    .mkdir_p     = &vfs_littlefs_mkdir,
+    .rmdir_p     = &vfs_littlefs_rmdir,
+    // access_p
+	.truncate_p  = &vfs_littlefs_truncate,
+#ifdef ESP_LITTLEFS_ENABLE_FTRUNCATE
+    .ftruncate_p = &vfs_littlefs_ftruncate,
+#endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
+#if CONFIG_LITTLEFS_USE_MTIME
+    .utime_p     = &vfs_littlefs_utime,
+#endif // CONFIG_LITTLEFS_USE_MTIME
+};
+#endif // CONFIG_VFS_SUPPORT_DIR
+
+static esp_vfs_fs_ops_t s_vfs_littlefs = {
+    .write_p     = &vfs_littlefs_write,
+    .pwrite_p    = &vfs_littlefs_pwrite,
+    .lseek_p     = &vfs_littlefs_lseek,
+    .read_p      = &vfs_littlefs_read,
+    .pread_p     = &vfs_littlefs_pread,
+    .open_p      = &vfs_littlefs_open,
+    .close_p     = &vfs_littlefs_close,
+    .fsync_p     = &vfs_littlefs_fsync,
+    .fcntl_p     = &vfs_littlefs_fcntl,
+#ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
+    .fstat_p     = &vfs_littlefs_fstat,
+#endif
+#ifdef CONFIG_VFS_SUPPORT_DIR
+    .dir = &s_vfs_littlefs_dir,
+#endif // CONFIG_VFS_SUPPORT_DIR
+};
+
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
 esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 {
     assert(conf->base_path);
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
     const esp_vfs_t vfs = vfs_littlefs_create_struct(!conf->read_only);
+#endif // ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 
     esp_err_t err = esp_littlefs_init(conf);
     if (err != ESP_OK) {
@@ -399,7 +449,15 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
     }
 
     strlcat(_efs[index]->base_path, conf->base_path, ESP_VFS_PATH_MAX + 1);
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+    int flags = ESP_VFS_FLAG_CONTEXT_PTR | ESP_VFS_FLAG_STATIC; 
+    if (conf->read_only) {
+        flags |= ESP_VFS_FLAG_READONLY_FS;
+    }
+    err = esp_vfs_register_fs(conf->base_path, &s_vfs_littlefs, flags, _efs[index]);
+#else
     err = esp_vfs_register(conf->base_path, &vfs, _efs[index]);
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
     if (err != ESP_OK) {
         esp_littlefs_free(&_efs[index]);
         ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to register Littlefs to \"%s\"", conf->base_path);
@@ -636,6 +694,7 @@ static const char * esp_littlefs_errno(enum lfs_error lfs_errno) {
 #define esp_littlefs_errno(x) ""
 #endif
 
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 static esp_vfs_t vfs_littlefs_create_struct(bool writeable) {
     esp_vfs_t vfs = {
         .flags       = ESP_VFS_FLAG_CONTEXT_PTR,
@@ -675,6 +734,9 @@ static esp_vfs_t vfs_littlefs_create_struct(bool writeable) {
 #endif // CONFIG_VFS_SUPPORT_DIR
 };
     if(!writeable) {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+        vfs.flags |= ESP_VFS_FLAG_READONLY_FS;
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
         vfs.write_p  = NULL;
         vfs.pwrite_p = NULL;
         vfs.fsync_p  = NULL;
@@ -686,6 +748,7 @@ static esp_vfs_t vfs_littlefs_create_struct(bool writeable) {
     }
     return vfs;
 }
+#endif // ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 
 /**
  * @brief Free and clear a littlefs definition structure.
