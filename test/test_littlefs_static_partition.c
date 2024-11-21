@@ -137,7 +137,7 @@ TEST_CASE("grow filesystem", "[littlefs]")
       .partition = (const esp_partition_t *) &partition,
     };
 
-    uint32_t shrink_bytes;
+    size_t shrink_bytes;
 
     /* Format a smaller partition */
     {
@@ -158,7 +158,7 @@ TEST_CASE("grow filesystem", "[littlefs]")
 
     /* Mount, ensure that it DOES grow */
     {
-        uint32_t grow_bytes;
+        size_t grow_bytes;
         conf.grow_on_mount = true;
         TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
         TEST_ESP_OK(esp_littlefs_partition_info(&partition, &grow_bytes, NULL));
