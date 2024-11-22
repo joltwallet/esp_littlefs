@@ -156,7 +156,8 @@ TEST_CASE("w+ mode read and write file", "[littlefs]")
 
 TEST_CASE("can open maximum number of files", "[littlefs]")
 {
-    size_t max_files = 61;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
+    size_t max_files = FOPEN_MAX - 3;  /* account for stdin, stdout, stderr, esp-idf defaults to maximum 64 file descriptors */
+
     test_setup();
     test_littlefs_open_max_files("/littlefs/f", max_files);
     test_teardown();
