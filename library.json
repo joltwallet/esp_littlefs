@@ -1,6 +1,6 @@
 {
   "name": "esp_littlefs",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "LittleFS is a small fail-safe filesystem for micro-controllers.",
   "frameworks": "espidf",
   "platforms": "*",
