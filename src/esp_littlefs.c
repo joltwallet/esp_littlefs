@@ -933,21 +933,11 @@ static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sd
         (*efs)->cfg.erase = littlefs_sdmmc_erase;
         (*efs)->cfg.sync  = littlefs_sdmmc_sync;
 
-        size_t max_allowed_blk_cnt = 0;
-        if (((uint64_t)sdcard->csd.capacity * (uint64_t)sdcard->csd.sector_size) > SIZE_MAX) {
-            max_allowed_blk_cnt = SIZE_MAX / sdcard->csd.sector_size;
-            ESP_LOGW(ESP_LITTLEFS_TAG, "SD card is too big (sector=%d, count=%d; total=%llu bytes), throttling to maximum possible %u blocks",
-                     sdcard->csd.sector_size, sdcard->csd.capacity,
-                     (((uint64_t)sdcard->csd.capacity * (uint64_t)sdcard->csd.sector_size)), max_allowed_blk_cnt);
-        } else {
-            max_allowed_blk_cnt = sdcard->csd.capacity;
-        }
-
         // block device configuration
         (*efs)->cfg.read_size = sdcard->csd.sector_size;
         (*efs)->cfg.prog_size = sdcard->csd.sector_size;
         (*efs)->cfg.block_size = sdcard->csd.sector_size;
-        (*efs)->cfg.block_count = max_allowed_blk_cnt;
+        (*efs)->cfg.block_count = sdcard->csd.capacity;
         (*efs)->cfg.cache_size = MAX(CONFIG_LITTLEFS_CACHE_SIZE, sdcard->csd.sector_size); // Must not be smaller than SD sector size
         (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
         (*efs)->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
