@@ -899,7 +899,7 @@ static int esp_littlefs_flags_conv(int m) {
 
 static void esp_littlefs_take_efs_lock(void) {
     if( _efs_lock == NULL ){
-#ifdef ESP32  // ESP8266 only has one core, no need for SMP protection
+#if portNUM_PROCESSORS > 1  // SMP protection needed for multi-core
         static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
         portENTER_CRITICAL(&mux);
 #endif
@@ -907,7 +907,7 @@ static void esp_littlefs_take_efs_lock(void) {
             _efs_lock = xSemaphoreCreateMutex();
             assert(_efs_lock);
         }
-#ifdef ESP32
+#if portNUM_PROCESSORS > 1
         portEXIT_CRITICAL(&mux);
 #endif
     }
