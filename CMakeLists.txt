@@ -5,6 +5,7 @@ list(APPEND SOURCES src/esp_littlefs.c src/littlefs_esp_part.c src/lfs_config.c)
 
 if(CONFIG_LITTLEFS_SDMMC_SUPPORT)
     list(APPEND SOURCES src/littlefs_sdmmc.c)
+    list(APPEND priv_requires sdmmc)
 endif()
 
 if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
@@ -12,7 +13,7 @@ if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
 else()
     list(APPEND pub_requires spi_flash)
 endif()
-list(APPEND priv_requires esptool_py spi_flash vfs sdmmc)
+list(APPEND priv_requires esptool_py spi_flash vfs)
 
 idf_component_register(
     SRCS ${SOURCES}
