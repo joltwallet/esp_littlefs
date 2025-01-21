@@ -6,6 +6,7 @@ list(APPEND SOURCES src/esp_littlefs.c src/littlefs_esp_part.c src/lfs_config.c)
 if(CONFIG_LITTLEFS_SDMMC_SUPPORT)
     list(APPEND SOURCES src/littlefs_sdmmc.c)
     list(APPEND priv_requires sdmmc)
+    list(APPEND pub_requires sdmmc)
 endif()
 
 if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
