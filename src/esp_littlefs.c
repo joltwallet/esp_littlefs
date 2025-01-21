@@ -899,9 +899,11 @@ static int esp_littlefs_flags_conv(int m) {
 
 static void esp_littlefs_take_efs_lock(void) {
     if( _efs_lock == NULL ){
-#if portNUM_PROCESSORS > 1  // SMP protection needed for multi-core
+#if portNUM_PROCESSORS > 1
         static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
         portENTER_CRITICAL(&mux);
+#else
+        taskENTER_CRITICAL();
 #endif
         if( _efs_lock == NULL ){
             _efs_lock = xSemaphoreCreateMutex();
@@ -909,6 +911,8 @@ static void esp_littlefs_take_efs_lock(void) {
         }
 #if portNUM_PROCESSORS > 1
         portEXIT_CRITICAL(&mux);
+#else
+        taskEXIT_CRITICAL();
 #endif
     }
 
