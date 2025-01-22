@@ -899,20 +899,20 @@ static int esp_littlefs_flags_conv(int m) {
 
 static void esp_littlefs_take_efs_lock(void) {
     if( _efs_lock == NULL ){
-#if portNUM_PROCESSORS > 1
+#ifdef ESP8266
+        taskENTER_CRITICAL();
+#else
         static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
         portENTER_CRITICAL(&mux);
-#else
-        taskENTER_CRITICAL();
 #endif
         if( _efs_lock == NULL ){
             _efs_lock = xSemaphoreCreateMutex();
             assert(_efs_lock);
         }
-#if portNUM_PROCESSORS > 1
-        portEXIT_CRITICAL(&mux);
-#else
+#ifdef ESP8266
         taskEXIT_CRITICAL();
+#else
+        portEXIT_CRITICAL(&mux);
 #endif
     }
 
