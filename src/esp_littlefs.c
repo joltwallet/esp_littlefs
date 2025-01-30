@@ -279,7 +279,7 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
             return ESP_FAIL;
         }
         efs->cache_size = CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE;  // Initial size of cache; will resize ondemand
-        efs->cache = esp_littlefs_calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = esp_littlefs_calloc(efs->cache_size, sizeof(*efs->cache));
     }
     ESP_LOGV(ESP_LITTLEFS_TAG, "Format Success!");
 
@@ -1148,7 +1148,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             goto exit;
         }
         efs->cache_size = 4;
-        efs->cache = esp_littlefs_calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = esp_littlefs_calloc(efs->cache_size, sizeof(*efs->cache));
 
         if(conf->grow_on_mount){
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
