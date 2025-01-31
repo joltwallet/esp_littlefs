@@ -5,6 +5,9 @@ list(APPEND SOURCES src/esp_littlefs.c src/littlefs_esp_part.c src/lfs_config.c)
 
 if(CONFIG_LITTLEFS_SDMMC_SUPPORT)
     list(APPEND SOURCES src/littlefs_sdmmc.c)
+endif()
+
+if(NOT CONFIG_IDF_TARGET_ESP8266)
     list(APPEND pub_requires sdmmc)
 endif()
 
