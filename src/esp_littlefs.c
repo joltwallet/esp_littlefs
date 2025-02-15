@@ -24,15 +24,16 @@
 #include <sys/param.h>
 #include <unistd.h>
 
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)
+#error "esp_littlefs requires esp-idf >=5.0"
+#endif
+
+
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
 #endif
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "spi_flash_mmap.h"
-#else
-#include "esp_spi_flash.h"
-#endif
 
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/spi_flash.h"

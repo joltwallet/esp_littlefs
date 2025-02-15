@@ -58,7 +58,7 @@ function(littlefs_create_partition_image partition base_dir)
 
 		set(IDF_VER_NO_V "${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}")
 
-		if(${IDF_VER_NO_V} VERSION_LESS 4.3)
+		if(${IDF_VER_NO_V} VERSION_LESS 5.0)
 			message(WARNING "Unsupported/unmaintained/deprecated ESP-IDF version ${IDF_VER}")
 		endif()
 

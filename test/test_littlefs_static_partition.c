@@ -1,12 +1,6 @@
 // #define LOG_LOCAL_LEVEL 4
 #include "test_littlefs_common.h"
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-  #include "spi_flash_mmap.h"
-#else
-  #include "esp_spi_flash.h"
-#endif
-
+#include "spi_flash_mmap.h"
 #include "esp_flash.h"
 
 static esp_partition_t get_test_data_static_partition(void);
