@@ -62,7 +62,7 @@ nvs,      data, nvs,      0x9000,  0x5000,
 otadata,  data, ota,      0xe000,  0x2000,
 app0,     app,  ota_0,    0x10000, 0x1E0000,
 app1,     app,  ota_1,    0x1F0000,0x1E0000,
-littlefs, data, spiffs,   0x3D0000,0x20000,
+littlefs, data, littlefs,   0x3D0000,0x20000,
 coredump, data, coredump, 0x3F0000,0x10000,
 ```
 
@@ -127,6 +127,17 @@ phy_init, data, phy,      0xf000,  0x1000,
 factory,  app,  factory,  0x10000, 1M,
 graphics,  data, spiffs,         ,  0xF0000, 
 ```
+
+change it to: 
+
+```
+# Name,   Type, SubType,  Offset,  Size, Flags
+nvs,      data, nvs,      0x9000,  0x6000,
+phy_init, data, phy,      0xf000,  0x1000,
+factory,  app,  factory,  0x10000, 1M,
+graphics,  data, littlefs,         ,  0xF0000, 
+```
+
 
 and your project has a folder called `device_graphics/`, your call should be:
 
