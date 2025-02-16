@@ -18,11 +18,8 @@
 #include <unistd.h>
 #include "esp_idf_version.h"
 #include "esp_flash.h"
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "esp_chip_info.h"
 #include "spi_flash_mmap.h"
-#endif
 
 
 #include "esp_littlefs.h"
