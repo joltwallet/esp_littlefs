@@ -24,9 +24,9 @@ extern "C" {
 #define CONFIG_VFS_SUPPORT_DIR 1
 #endif
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2) && CONFIG_VFS_SUPPORT_DIR
+#if CONFIG_VFS_SUPPORT_DIR
 #define ESP_LITTLEFS_ENABLE_FTRUNCATE
-#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 2)
+#endif // CONFIG_VFS_SUPPORT_DIR
 
 /**
  *Configuration structure for esp_vfs_littlefs_register.

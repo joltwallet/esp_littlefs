@@ -14,11 +14,7 @@ else()
     endif()
 endif()
 
-if(IDF_VERSION_MAJOR GREATER_EQUAL 5)
-    list(APPEND pub_requires esp_partition)
-else()
-    list(APPEND pub_requires spi_flash)
-endif()
+list(APPEND pub_requires esp_partition)
 list(APPEND priv_requires esptool_py spi_flash vfs)
 
 idf_component_register(

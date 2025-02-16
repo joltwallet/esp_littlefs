@@ -1,11 +1,6 @@
 #include "test_littlefs_common.h"
 #include "esp_vfs_fat.h"
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-#define esp_vfs_fat_spiflash_mount esp_vfs_fat_spiflash_mount_rw_wl
-#define esp_vfs_fat_spiflash_unmount esp_vfs_fat_spiflash_unmount_rw_wl
-#endif
-
 static const char TAG[] = "[littlefs_benchmark]";
 
 // Handle of the wear levelling library instance
@@ -45,7 +40,7 @@ static void setup_fat(){
             .format_if_mount_failed = true,
             .allocation_unit_size = CONFIG_WL_SECTOR_SIZE
     };
-    esp_err_t err = esp_vfs_fat_spiflash_mount("/fat", "fat_store", &conf, &s_wl_handle);
+    esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl("/fat", "fat_store", &conf, &s_wl_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
         TEST_FAIL();
@@ -72,7 +67,7 @@ static void test_benchmark_setup() {
 
 static void test_benchmark_teardown()
 {
-    assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
+    assert(ESP_OK == esp_vfs_fat_spiflash_unmount_rw_wl("/fat", s_wl_handle));
     TEST_ESP_OK(esp_vfs_spiffs_unregister("spiffs_store"));
     TEST_ESP_OK(esp_vfs_littlefs_unregister("flash_test"));
     printf("Test teardown complete.\n");
