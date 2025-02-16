@@ -43,10 +43,10 @@ jobs:
       - name: esp-idf build library
         uses: espressif/esp-idf-ci-action@main
         with:
-          esp_idf_version: ${{ matrix.idf_ver }}
+          esp_idf_version: release-${{ matrix.idf_ver }}
           target: ${{ matrix.idf_target }}
           path: "example/"
-          command: apt-get update && apt-get install -y python3-venv && idf.py build
+          command: apt-get update && apt-get install -y python3-venv && idf.py --version && idf.py build
 
       - name: esp-idf build tests
         uses: espressif/esp-idf-ci-action@main
