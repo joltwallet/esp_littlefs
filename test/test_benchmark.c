@@ -67,7 +67,7 @@ static void test_benchmark_setup() {
 
 static void test_benchmark_teardown()
 {
-    assert(ESP_OK == esp_vfs_fat_spiflash_unmount("/fat", s_wl_handle));
+    assert(ESP_OK == esp_vfs_fat_spiflash_unmount_rw_wl("/fat", s_wl_handle));
     TEST_ESP_OK(esp_vfs_spiffs_unregister("spiffs_store"));
     TEST_ESP_OK(esp_vfs_littlefs_unregister("flash_test"));
     printf("Test teardown complete.\n");
