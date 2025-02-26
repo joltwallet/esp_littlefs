@@ -1886,9 +1886,16 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
 #endif
 
     sem_give(efs);
-
-    st->st_size = info.size;
-    st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
+    if(info.type==LFS_TYPE_REG){
+        // Regular File
+        st->st_mode = S_IFREG;
+        st->st_size = info.size;
+    }
+    else{
+        // Directory
+        st->st_mode = S_IFDIR;
+        st->st_size = 0;  // info.size is only valid for REG files
+    }
     return 0;
 }
 #endif
@@ -1918,8 +1925,16 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
     st->st_mtime = vfs_littlefs_get_mtime(efs, path);
 #endif
     sem_give(efs);
-    st->st_size = info.size;
-    st->st_mode = ((info.type==LFS_TYPE_REG)?S_IFREG:S_IFDIR);
+    if(info.type==LFS_TYPE_REG){
+        // Regular File
+        st->st_mode = S_IFREG;
+        st->st_size = info.size;
+    }
+    else{
+        // Directory
+        st->st_mode = S_IFDIR;
+        st->st_size = 0;  // info.size is only valid for REG files
+    }
     return 0;
 }
 
