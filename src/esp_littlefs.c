@@ -23,6 +23,7 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include "esp_random.h"
 
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)
 #error "esp_littlefs requires esp-idf >=5.0"
@@ -135,7 +136,7 @@ static int       esp_littlefs_flags_conv(int m);
 static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
 static int       esp_littlefs_update_mtime_attr(esp_littlefs_t *efs, const char *path, time_t t);
 static time_t    esp_littlefs_get_mtime_attr(esp_littlefs_t *efs, const char *path);
-static time_t    esp_littlefs_get_updated_time(vfs_littlefs_file_t *file, const char *path);
+static time_t    esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_file_t *file, const char *path);
 #endif
 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1769,7 +1770,7 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     if ((file->file.flags & O_DIRECTORY) == 0) {
 #endif
 #if CONFIG_LITTLEFS_USE_MTIME
-    file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(file, NULL);
+    file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(efs, file, NULL);
 #endif
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
@@ -2352,7 +2353,7 @@ static int esp_littlefs_file_sync(esp_littlefs_t *efs, vfs_littlefs_file_t *file
     int res;
 #if CONFIG_LITTLEFS_USE_MTIME
     if((file->file.flags & 0x3) != LFS_O_RDONLY){
-        file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(file, NULL);
+        file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(efs, file, NULL);
     }
 #endif
     res = lfs_file_sync(efs->fs, &file->file);
@@ -2382,14 +2383,14 @@ static int esp_littlefs_update_mtime_attr(esp_littlefs_t *efs, const char *path,
  * @param file If non-null, use this file's attribute to get previous file's time (if use nonce).
  * @param path If non-null, use this path to read in the previous file's time (if use nonce).
  */
-static time_t esp_littlefs_get_updated_time(vfs_littlefs_file_t *file, const char *path)
+static time_t esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_file_t *file, const char *path)
 {
     time_t t;
 #if CONFIG_LITTLEFS_MTIME_USE_SECONDS
     // use current time
     t = time(NULL);
 #elif CONFIG_LITTLEFS_MTIME_USE_NONCE
-    assert( sizeof(time_t) == 4 );
+    assert( sizeof(time_t) == 8 );
     if(path){
         t = esp_littlefs_get_mtime_attr(efs, path);
     }
@@ -2417,7 +2418,7 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
     if (times) {
         t = times->modtime;
     } else {
-        t = esp_littlefs_get_updated_time(NULL, path);
+        t = esp_littlefs_get_updated_time(efs, NULL, path);
     }
 
     int ret = esp_littlefs_update_mtime_attr(efs, path, t);
