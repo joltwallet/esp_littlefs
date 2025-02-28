@@ -1497,6 +1497,15 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #ifndef CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE
     /* Open File */
     res = lfs_file_opencfg(efs->fs, &file->file, path, lfs_flags, &file->lfs_file_config);
+#if CONFIG_LITTLEFS_MTIME_USE_NONCE
+    if(!(lfs_flags & LFS_O_RDONLY)){
+        // When the READ flag is set, LittleFS will automatically populate attributes.
+        // If it's not set, it will not populate attributes.
+        // We want the attributes regardless so that we can properly update it.
+        file->lfs_attr_time_buffer = esp_littlefs_get_mtime_attr(efs, path);
+    }
+#endif
+
 #else
     #error "The use of static buffers is not currently supported by this VFS wrapper"
 #endif
@@ -1530,7 +1539,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #if CONFIG_LITTLEFS_OPEN_DIR
     if ( (flags & O_DIRECTORY) == 0 ) {
 #endif
-    if(!efs->read_only)
+    if(!efs->read_only && lfs_flags != LFS_O_RDONLY)
     {
         res = esp_littlefs_file_sync(efs, file);
     }
@@ -2342,7 +2351,9 @@ static int esp_littlefs_file_sync(esp_littlefs_t *efs, vfs_littlefs_file_t *file
 {
     int res;
 #if CONFIG_LITTLEFS_USE_MTIME
-    file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(file, NULL);
+    if((file->file.flags & 0x3) != LFS_O_RDONLY){
+        file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(file, NULL);
+    }
 #endif
     res = lfs_file_sync(efs->fs, &file->file);
     return res;
