@@ -19,7 +19,12 @@
 extern "C" {
 #endif
 
-#define ESP_LITTLEFS_ATTR_COUNT 1
+#if CONFIG_LITTLEFS_USE_MTIME
+    #define ESP_LITTLEFS_ATTR_COUNT 1
+#else
+    #define ESP_LITTLEFS_ATTR_COUNT 0
+#endif
+
 /**
  * @brief a file descriptor
  * That's also a singly linked list used for keeping tracks of all opened file descriptor 
@@ -42,7 +47,10 @@ typedef struct _vfs_littlefs_file_t {
     /* Allocate all other necessary buffers */
     struct lfs_file_config lfs_file_config;
     uint8_t lfs_buffer[CONFIG_LITTLEFS_CACHE_SIZE];
+#if ESP_LITTLEFS_ATTR_COUNT
     struct lfs_attr lfs_attr[ESP_LITTLEFS_ATTR_COUNT];
+    time_t lfs_attr_time_buffer;
+#endif
 
     uint32_t hash;
     struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
