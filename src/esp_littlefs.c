@@ -23,6 +23,7 @@
 #include <sys/lock.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include "esp_random.h"
 
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)
 #error "esp_littlefs requires esp-idf >=5.0"
@@ -63,12 +64,12 @@
 /**
  * @brief Last Modified Time
  *
- * Use 't' for LITTLEFS_ATTR_MTIME to match example:
+ * Use 't' for ESP_LITTLEFS_ATTR_MTIME to match example:
  *     https://github.com/ARMmbed/littlefs/issues/23#issuecomment-482293539
  * And to match other external tools such as:
  *     https://github.com/earlephilhower/mklittlefs
  */
-#define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
+#define ESP_LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
 /**
  * @brief littlefs DIR structure
@@ -121,6 +122,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
 
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int*index);
+static int esp_littlefs_file_sync(esp_littlefs_t *efs, vfs_littlefs_file_t *file);
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index);
@@ -132,9 +134,9 @@ static int       esp_littlefs_flags_conv(int m);
 
 #if CONFIG_LITTLEFS_USE_MTIME
 static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
-static void      vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path);
-static int       vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t);
-static time_t    vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path);
+static int       esp_littlefs_update_mtime_attr(esp_littlefs_t *efs, const char *path, time_t t);
+static time_t    esp_littlefs_get_mtime_attr(esp_littlefs_t *efs, const char *path);
+static time_t    esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_file_t *file, const char *path);
 #endif
 
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
@@ -1285,6 +1287,16 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
     (*file)->path = (char*)(*file) + sizeof(**file);
 #endif
 
+    /* initialize lfs_file_config */
+    (*file)->lfs_file_config.buffer = (*file)->lfs_buffer;
+#if ESP_LITTLEFS_ATTR_COUNT
+    (*file)->lfs_file_config.attrs = (*file)->lfs_attr;
+    (*file)->lfs_attr[0].type = ESP_LITTLEFS_ATTR_MTIME;
+    (*file)->lfs_attr[0].buffer = &(*file)->lfs_attr_time_buffer;
+    (*file)->lfs_attr[0].size = sizeof((*file)->lfs_attr_time_buffer);
+#endif
+    (*file)->lfs_file_config.attr_count = ESP_LITTLEFS_ATTR_COUNT;
+
     /* Now find a free place in cache */
     for(i=0; i < efs->cache_size; i++) {
         if (efs->cache[i] == NULL) {
@@ -1485,7 +1497,16 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
 #ifndef CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE
     /* Open File */
-    res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
+    res = lfs_file_opencfg(efs->fs, &file->file, path, lfs_flags, &file->lfs_file_config);
+#if CONFIG_LITTLEFS_MTIME_USE_NONCE
+    if(!(lfs_flags & LFS_O_RDONLY)){
+        // When the READ flag is set, LittleFS will automatically populate attributes.
+        // If it's not set, it will not populate attributes.
+        // We want the attributes regardless so that we can properly update it.
+        file->lfs_attr_time_buffer = esp_littlefs_get_mtime_attr(efs, path);
+    }
+#endif
+
 #else
     #error "The use of static buffers is not currently supported by this VFS wrapper"
 #endif
@@ -1519,9 +1540,9 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 #if CONFIG_LITTLEFS_OPEN_DIR
     if ( (flags & O_DIRECTORY) == 0 ) {
 #endif
-    if(!efs->read_only)
+    if(!efs->read_only && lfs_flags != LFS_O_RDONLY)
     {
-        res = lfs_file_sync(efs->fs, &file->file);
+        res = esp_littlefs_file_sync(efs, file);
     }
     if(res < 0){
         errno = lfs_errno_remap(res);
@@ -1540,13 +1561,6 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
     file->hash = compute_hash(path);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     memcpy(file->path, path, path_len);
-#endif
-
-#if CONFIG_LITTLEFS_USE_MTIME
-    if (lfs_flags != LFS_O_RDONLY) {
-        /* If this is being opened as not read-only */
-        vfs_littlefs_update_mtime(efs, path);
-    }
 #endif
 
     sem_give(efs);
@@ -1738,7 +1752,6 @@ exit:
 }
 
 static int vfs_littlefs_close(void* ctx, int fd) {
-    // TODO update mtime on close? SPIFFS doesn't do this
     esp_littlefs_t * efs = (esp_littlefs_t *)ctx;
     int res;
     vfs_littlefs_file_t *file = NULL;
@@ -1756,6 +1769,9 @@ static int vfs_littlefs_close(void* ctx, int fd) {
 #if CONFIG_LITTLEFS_OPEN_DIR
     if ((file->file.flags & O_DIRECTORY) == 0) {
 #endif
+#if CONFIG_LITTLEFS_USE_MTIME
+    file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(efs, file, NULL);
+#endif
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
         errno = lfs_errno_remap(res);
@@ -1769,6 +1785,7 @@ static int vfs_littlefs_close(void* ctx, int fd) {
 #endif
         return -1;
     }
+    // TODO: update directory containing file's mtime.
 #if CONFIG_LITTLEFS_OPEN_DIR
     } else {
         res = 0;
@@ -1837,7 +1854,7 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
         return -1;
     }
     file = efs->cache[fd];
-    res = lfs_file_sync(efs->fs, &file->file);
+    res = esp_littlefs_file_sync(efs, file);
     sem_give(efs);
 
     if(res < 0){
@@ -1882,7 +1899,7 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     }
 
 #if CONFIG_LITTLEFS_USE_MTIME
-    st->st_mtime = vfs_littlefs_get_mtime(efs, file->path);
+    st->st_mtime = file->lfs_attr_time_buffer;
 #endif
 
     sem_give(efs);
@@ -1922,7 +1939,7 @@ static int vfs_littlefs_stat(void* ctx, const char * path, struct stat * st) {
         return -1;
     }
 #if CONFIG_LITTLEFS_USE_MTIME
-    st->st_mtime = vfs_littlefs_get_mtime(efs, path);
+    st->st_mtime = esp_littlefs_get_mtime_attr(efs, path);
 #endif
     sem_give(efs);
     if(info.type==LFS_TYPE_REG){
@@ -2328,14 +2345,29 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 #endif // ESP_LITTLEFS_ENABLE_FTRUNCATE
 #endif //CONFIG_VFS_SUPPORT_DIR
 
+/**
+ * Syncs file while also updating mtime (if necessary)
+ */
+static int esp_littlefs_file_sync(esp_littlefs_t *efs, vfs_littlefs_file_t *file)
+{
+    int res;
+#if CONFIG_LITTLEFS_USE_MTIME
+    if((file->file.flags & 0x3) != LFS_O_RDONLY){
+        file->lfs_attr_time_buffer = esp_littlefs_get_updated_time(efs, file, NULL);
+    }
+#endif
+    res = lfs_file_sync(efs->fs, &file->file);
+    return res;
+}
+
 #if CONFIG_LITTLEFS_USE_MTIME
 /**
  * Sets the mtime attr to t.
  */
-static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t)
+static int esp_littlefs_update_mtime_attr(esp_littlefs_t *efs, const char *path, time_t t)
 {
     int res;
-    res = lfs_setattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+    res = lfs_setattr(efs->fs, path, ESP_LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
     if( res < 0 ) {
         errno = lfs_errno_remap(res);
@@ -2347,13 +2379,37 @@ static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path
 }
 
 /**
- * Sets the mtime attr to an appropriate value
+ * @brief Only to be used when calcualting what time we should write to disk.
+ * @param file If non-null, use this file's attribute to get previous file's time (if use nonce).
+ * @param path If non-null, use this path to read in the previous file's time (if use nonce).
  */
-static void vfs_littlefs_update_mtime(esp_littlefs_t *efs, const char *path)
+static time_t esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_file_t *file, const char *path)
 {
-    vfs_littlefs_utime(efs, path, NULL);
-}
+    time_t t;
+#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
+    // use current time
+    t = time(NULL);
+#elif CONFIG_LITTLEFS_MTIME_USE_NONCE
+    assert( sizeof(time_t) == 8 );
+    if(path){
+        t = esp_littlefs_get_mtime_attr(efs, path);
+    }
+    elif(file){
+        t = file->lfs_attr_time_buffer;
+    }
+    else{
+        // Invalid input arguments.
+        assert(0);
+    }
+    if( 0 == t ) t = esp_random();
+    else t += 1;
 
+    if( 0 == t ) t = 1;
+#else
+#error "Invalid MTIME configuration"
+#endif
+    return t;
+}
 
 static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times)
 {
@@ -2366,31 +2422,19 @@ static int vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf 
     if (times) {
         t = times->modtime;
     } else {
-#if CONFIG_LITTLEFS_MTIME_USE_SECONDS
-        // use current time
-        t = time(NULL);
-#elif CONFIG_LITTLEFS_MTIME_USE_NONCE
-        assert( sizeof(time_t) == 4 );
-        t = vfs_littlefs_get_mtime(efs, path);
-        if( 0 == t ) t = esp_random();
-        else t += 1;
-
-        if( 0 == t ) t = 1;
-#else
-#error "Invalid MTIME configuration"
-#endif
+        t = esp_littlefs_get_updated_time(efs, NULL, path);
     }
 
-    int ret = vfs_littlefs_update_mtime_value(efs, path, t);
+    int ret = esp_littlefs_update_mtime_attr(efs, path, t);
     sem_give(efs);
     return ret;
 }
 
-static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
+static time_t esp_littlefs_get_mtime_attr(esp_littlefs_t *efs, const char *path)
 {
     time_t t;
     int size;
-    size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+    size = lfs_getattr(efs->fs, path, ESP_LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
     if( size < 0 ) {
         errno = lfs_errno_remap(size);
