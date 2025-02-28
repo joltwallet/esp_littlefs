@@ -9,7 +9,7 @@
 #include "esp_vfs.h"
 #include "esp_partition.h"
 #include "littlefs/lfs.h"
-#include <sdkconfig.h>
+#include "sdkconfig.h"
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+#define ESP_LITTLEFS_ATTR_COUNT 1
 /**
  * @brief a file descriptor
  * That's also a singly linked list used for keeping tracks of all opened file descriptor 
@@ -37,7 +38,13 @@ extern "C" {
  */
 typedef struct _vfs_littlefs_file_t {
     lfs_file_t file;
-    uint32_t   hash;
+
+    /* Allocate all other necessary buffers */
+    struct lfs_file_config lfs_file_config;
+    uint8_t lfs_buffer[CONFIG_LITTLEFS_CACHE_SIZE];
+    struct lfs_attr lfs_attr[ESP_LITTLEFS_ATTR_COUNT];
+
+    uint32_t hash;
     struct _vfs_littlefs_file_t * next;       /*!< Pointer to next file in Singly Linked List */
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
     char     * path;

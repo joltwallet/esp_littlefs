@@ -63,12 +63,12 @@
 /**
  * @brief Last Modified Time
  *
- * Use 't' for LITTLEFS_ATTR_MTIME to match example:
+ * Use 't' for ESP_LITTLEFS_ATTR_MTIME to match example:
  *     https://github.com/ARMmbed/littlefs/issues/23#issuecomment-482293539
  * And to match other external tools such as:
  *     https://github.com/earlephilhower/mklittlefs
  */
-#define LITTLEFS_ATTR_MTIME ((uint8_t) 't')
+#define ESP_LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
 /**
  * @brief littlefs DIR structure
@@ -1285,6 +1285,11 @@ static int esp_littlefs_allocate_fd(esp_littlefs_t *efs, vfs_littlefs_file_t ** 
     (*file)->path = (char*)(*file) + sizeof(**file);
 #endif
 
+    /* initialize lfs_file_config */
+    (*file)->lfs_file_config.buffer = (*file)->lfs_buffer;
+    (*file)->lfs_file_config.attrs = (*file)->lfs_attr;
+    (*file)->lfs_file_config.attr_count = ESP_LITTLEFS_ATTR_COUNT;
+
     /* Now find a free place in cache */
     for(i=0; i < efs->cache_size; i++) {
         if (efs->cache[i] == NULL) {
@@ -1485,7 +1490,7 @@ static int vfs_littlefs_open(void* ctx, const char * path, int flags, int mode) 
 
 #ifndef CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE
     /* Open File */
-    res = lfs_file_open(efs->fs, &file->file, path, lfs_flags);
+    res = lfs_file_opencfg(efs->fs, &file->file, path, lfs_flags, &file->lfs_file_config);
 #else
     #error "The use of static buffers is not currently supported by this VFS wrapper"
 #endif
@@ -2335,7 +2340,7 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
 static int vfs_littlefs_update_mtime_value(esp_littlefs_t *efs, const char *path, time_t t)
 {
     int res;
-    res = lfs_setattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+    res = lfs_setattr(efs->fs, path, ESP_LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
     if( res < 0 ) {
         errno = lfs_errno_remap(res);
@@ -2390,7 +2395,7 @@ static time_t vfs_littlefs_get_mtime(esp_littlefs_t *efs, const char *path)
 {
     time_t t;
     int size;
-    size = lfs_getattr(efs->fs, path, LITTLEFS_ATTR_MTIME,
+    size = lfs_getattr(efs->fs, path, ESP_LITTLEFS_ATTR_MTIME,
             &t, sizeof(t));
     if( size < 0 ) {
         errno = lfs_errno_remap(size);
