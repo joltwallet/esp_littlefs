@@ -118,7 +118,7 @@ static void      esp_littlefs_dir_free(vfs_littlefs_dir_t *dir);
 
 static void      esp_littlefs_take_efs_lock(void);
 static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition_t* partition, bool read_only);
-static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf);
+static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *index);
 
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int*index);
@@ -417,38 +417,16 @@ static esp_vfs_fs_ops_t s_vfs_littlefs = {
 #endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
 esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 {
+    int index;
     assert(conf->base_path);
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
     const esp_vfs_t vfs = vfs_littlefs_create_struct(!conf->read_only);
 #endif // ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
 
-    esp_err_t err = esp_littlefs_init(conf);
+    esp_err_t err = esp_littlefs_init(conf, &index);
     if (err != ESP_OK) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize LittleFS");
         return err;
-    }
-
-    int index;
-
-    if(conf->partition_label) {
-        if (esp_littlefs_by_label(conf->partition_label, &index) != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Unable to find partition \"%s\"", conf->partition_label);
-            return ESP_ERR_NOT_FOUND;
-        }
-    }
-#ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
-    else if (conf->sdcard) {
-        if (esp_littlefs_by_sdmmc_handle(conf->sdcard, &index) != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Unable to find SD card \"%p\"", conf->sdcard);
-            return ESP_ERR_NOT_FOUND;
-        }
-    }
-#endif
-    else {
-        if (esp_littlefs_by_partition(conf->partition, &index) != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Unable to find partition \"0x%08"PRIX32"\"", conf->partition->address);
-            return ESP_ERR_NOT_FOUND;
-        }
     }
 
     strlcat(_efs[index]->base_path, conf->base_path, ESP_VFS_PATH_MAX + 1);
@@ -473,7 +451,6 @@ esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 
 esp_err_t esp_vfs_littlefs_unregister(const char* partition_label)
 {
-    assert(partition_label);
     int index;
     if (esp_littlefs_by_label(partition_label, &index) != ESP_OK) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "Partition was never registered.");
@@ -532,8 +509,6 @@ esp_err_t esp_vfs_littlefs_unregister_partition(const esp_partition_t* partition
 }
 
 esp_err_t esp_littlefs_format(const char* partition_label) {
-    assert( partition_label );
-
     bool efs_free = false;
     int index = -1;
     esp_err_t err;
@@ -552,15 +527,9 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
                 .dont_mount = true,
                 .partition_label = partition_label,
         };
-        err = esp_littlefs_init(&conf);
+        err = esp_littlefs_init(&conf, &index);
         if( err != ESP_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
-            goto exit;
-        }
-
-        err = esp_littlefs_by_label(partition_label, &index);
-        if ( err != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Error obtaining context.");
             goto exit;
         }
     }
@@ -594,15 +563,9 @@ esp_err_t esp_littlefs_format_partition(const esp_partition_t* partition) {
                 .partition_label = NULL,
                 .partition = partition,
         };
-        err = esp_littlefs_init(&conf);
+        err = esp_littlefs_init(&conf, &index);
         if( err != ESP_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
-            goto exit;
-        }
-
-        err = esp_littlefs_by_partition(partition, &index);
-        if ( err != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Error obtaining context.");
             goto exit;
         }
     }
@@ -640,15 +603,9 @@ esp_err_t esp_littlefs_format_sdmmc(sdmmc_card_t *sdcard)
                 .sdcard = sdcard,
         };
 
-        err = esp_littlefs_init(&conf);
+        err = esp_littlefs_init(&conf, &index);
         if( err != ESP_OK ) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
-            goto exit;
-        }
-
-        err = esp_littlefs_by_sdmmc_handle(sdcard, &index);
-        if ( err != ESP_OK) {
-            ESP_LOGE(ESP_LITTLEFS_TAG, "Error obtaining context.");
             goto exit;
         }
     }
@@ -790,7 +747,6 @@ static void esp_littlefs_dir_free(vfs_littlefs_dir_t *dir){
  * @param[out] index index into _efs
  * @return ESP_OK on success
  */
-
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int * index){
     int i;
     esp_littlefs_t * p;
@@ -814,11 +770,30 @@ static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int * in
     return ESP_ERR_NOT_FOUND;
 }
 
+/**
+ * @brief Find index of already mounted littlefs filesystem by label.
+ * @param[in] label
+ * @param[out] index
+ */
 static esp_err_t esp_littlefs_by_label(const char* label, int * index){
     int i;
     esp_littlefs_t * p;
+    const esp_partition_t *partition;
 
-    if(!label || !index) return ESP_ERR_INVALID_ARG;
+    if(!index) return ESP_ERR_INVALID_ARG;
+    if(!label){
+        // Search for first dat partition with subtype "littlefs"
+        partition = esp_partition_find_first(
+                ESP_PARTITION_TYPE_DATA,
+                ESP_PARTITION_SUBTYPE_DATA_LITTLEFS,
+                NULL
+        );
+        if(!partition){
+            ESP_LOGE(ESP_LITTLEFS_TAG, "No data partition with subtype \"littlefs\" found");
+            return ESP_ERR_NOT_FOUND;
+        }
+        label = partition->label;
+    }
 
     ESP_LOGV(ESP_LITTLEFS_TAG, "Searching for existing filesystem for partition \"%s\"", label);
 
@@ -1040,18 +1015,19 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
 /**
  * @brief Initialize and mount littlefs
  * @param[in] conf Filesystem Configuration
+ * @param[out] index On success, index into _efs.
  * @return ESP_OK on success
  */
-static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
+static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *index)
 {
-    int index = -1;
     esp_err_t err = ESP_FAIL;
     const esp_partition_t* partition = NULL;
     esp_littlefs_t * efs = NULL;
+    *index = -1;
 
     esp_littlefs_take_efs_lock();
 
-    if (esp_littlefs_get_empty(&index) != ESP_OK) {
+    if (esp_littlefs_get_empty(index) != ESP_OK) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "max mounted partitions reached");
         err = ESP_ERR_INVALID_STATE;
         goto exit;
@@ -1060,13 +1036,14 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
     if(conf->partition_label)
     {
         /* Input and Environment Validation */
-        if (esp_littlefs_by_label(conf->partition_label, &index) == ESP_OK) {
+        if (esp_littlefs_by_label(conf->partition_label, index) == ESP_OK) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Partition already used");
             err = ESP_ERR_INVALID_STATE;
             goto exit;
         }
         partition = esp_partition_find_first(
-                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
+                ESP_PARTITION_TYPE_DATA,
+                ESP_PARTITION_SUBTYPE_ANY,
                 conf->partition_label);
         if (!partition) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "partition \"%s\" could not be found", conf->partition_label);
@@ -1075,7 +1052,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         }
 
     } else if(conf->partition) {
-        if (esp_littlefs_by_partition(conf->partition, &index) == ESP_OK) {
+        if (esp_littlefs_by_partition(conf->partition, index) == ESP_OK) {
             ESP_LOGE(ESP_LITTLEFS_TAG, "Partition already used");
             err = ESP_ERR_INVALID_STATE;
             goto exit;
@@ -1091,9 +1068,17 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
         }
 #endif
     } else {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "No partition specified in configuration");
-        err = ESP_ERR_INVALID_ARG;
-        goto exit;
+        // Find first partition with "littlefs" subtype.
+        partition = esp_partition_find_first(
+                ESP_PARTITION_TYPE_DATA,
+                ESP_PARTITION_SUBTYPE_DATA_LITTLEFS,
+                NULL
+        );
+        if (!partition) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "No data partition with subtype \"littlefs\" found");
+            err = ESP_ERR_NOT_FOUND;
+            goto exit;
+        }
     }
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
@@ -1122,7 +1107,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
     }
 
     // Mount and Error Check
-    _efs[index] = efs;
+    _efs[*index] = efs;
     if(!conf->dont_mount){
         int res;
 
@@ -1174,8 +1159,8 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
 
 exit:
     if(err != ESP_OK){
-        if( index >= 0 ) {
-            esp_littlefs_free(&_efs[index]);
+        if( *index >= 0 ) {
+            esp_littlefs_free(&_efs[*index]);
         }
         else{
             esp_littlefs_free(&efs);

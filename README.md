@@ -103,9 +103,7 @@ Also see the comments in `include/esp_littlefs.h`
 Slight differences between this configuration and SPIFFS's configuration is in the `esp_vfs_littlefs_conf_t`:
 
 1. `max_files` field doesn't exist since we removed the file limit, thanks to @X-Ryl669
-2. `partition_label` is not allowed to be `NULL`. You must specify the partition name from your partition table. This is because there isn't a define `littlefs` partition subtype in `esp-idf`. The subtype doesn't matter.
-    * Alternatively, you can specify an `esp_partition_t*` to a `partition` and set `partition_label=NULL`.
-3. `grow_on_mount` will expand an existing filesystem to fill the partition. Defaults to `false`.
+2. `grow_on_mount` will expand an existing filesystem to fill the partition. Defaults to `false`.
     * LittleFS filesystems can only grow, they cannot shrink.
 
 ### Filesystem Image Creation
