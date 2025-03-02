@@ -321,30 +321,31 @@ TEST_CASE("mtime support", "[littlefs]")
     struct stat st;
     TEST_ASSERT_EQUAL(0, test_littlefs_stat(filename, &st));
     printf("mtime=%d\n", (int) st.st_mtime);
-    TEST_ASSERT(st.st_mtime >= t_before_create
-             && st.st_mtime <= t_after_create);
+    TEST_ASSERT(st.st_mtime >= t_before_create);
+    TEST_ASSERT(st.st_mtime <= t_after_create);
 
-    /* Wait a bit, open again, check that mtime is updated */
+    /* Wait a bit, open & close again, check that mtime is updated */
     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    time_t t_before_open = time(NULL);
+    time_t t_before_close = time(NULL);
     FILE *f = fopen(filename, "a");
-    time_t t_after_open = time(NULL);
+    TEST_ASSERT_EQUAL(0, fclose(f));
+    time_t t_after_close = time(NULL);
     TEST_ASSERT_EQUAL(0, test_littlefs_stat(filename, &st));
     printf("mtime=%d\n", (int) st.st_mtime);
-    TEST_ASSERT(st.st_mtime >= t_before_open
-             && st.st_mtime <= t_after_open);
-    TEST_ASSERT_EQUAL(0, fclose(f));
+    time_t append_mtime = st.st_mtime;
+    TEST_ASSERT(append_mtime >= t_before_close);
+    TEST_ASSERT(append_mtime <= t_after_close);
 
     /* Wait a bit, open for reading, check that mtime is not updated */
     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    time_t t_before_open_ro = time(NULL);
+    time_t t_before_close_ro = time(NULL);
     f = fopen(filename, "r");
+    TEST_ASSERT_EQUAL(0, fclose(f));
     TEST_ASSERT_EQUAL(0, test_littlefs_stat(filename, &st));
     printf("mtime=%d\n", (int) st.st_mtime);
-    TEST_ASSERT(t_before_open_ro > t_after_open
-             && st.st_mtime >= t_before_open
-             && st.st_mtime <= t_after_open);
-    TEST_ASSERT_EQUAL(0, fclose(f));
+    TEST_ASSERT(t_before_close_ro > t_after_close);  // sufficient time has passed for this test to be valid.
+    // make sure the st_mtime is the same as bfore
+    TEST_ASSERT(st.st_mtime == append_mtime);
 
     test_teardown();
 }
@@ -751,7 +752,9 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
     for (size_t i = 0; i < 7; ++i) {
         snprintf(names[i], sizeof(names[i]), littlefs_base_path "/%d", i + 1);
         unlink(names[i]);  // Make sure these files don't exist
+    }
 
+    for (size_t i = 0; i < 7; ++i) {
         FILE* f = fopen(names[i], "wb");
         TEST_ASSERT_NOT_NULL(f);
         char val = 'c';
