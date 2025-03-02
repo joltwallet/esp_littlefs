@@ -64,6 +64,24 @@ TEST_CASE("can format unmounted partition", "[littlefs]")
     test_teardown();
 }
 
+TEST_CASE("NULL label mounts first littlefs partition.", "[littlefs]")
+{
+    esp_littlefs_format(littlefs_test_partition_label);
+    const esp_vfs_littlefs_conf_t conf = {
+        .base_path = littlefs_base_path,
+        .partition_label = NULL,
+        .format_if_mount_failed = true
+    };
+    TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
+    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
+
+    TEST_ASSERT_TRUE( esp_littlefs_mounted(NULL) );
+    TEST_ASSERT_TRUE( esp_littlefs_mounted("named_part") );
+
+    TEST_ESP_OK(esp_vfs_littlefs_unregister(NULL));
+    TEST_ASSERT_TRUE( heap_caps_check_integrity_all(true) );
+}
+
 TEST_CASE("can create and write file", "[littlefs]")
 {
     test_setup();
