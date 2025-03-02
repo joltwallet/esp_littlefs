@@ -2394,7 +2394,7 @@ static time_t esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_fi
     if(path){
         t = esp_littlefs_get_mtime_attr(efs, path);
     }
-    elif(file){
+    else if(file){
         t = file->lfs_attr_time_buffer;
     }
     else{
