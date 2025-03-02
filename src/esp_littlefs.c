@@ -71,6 +71,16 @@
  */
 #define ESP_LITTLEFS_ATTR_MTIME ((uint8_t) 't')
 
+// ESP_PARTITION_SUBTYPE_DATA_LITTLEFS was introduced in later patch versions of esp-idf.
+// * v5.0.7
+// * v5.1.4
+// * v5.2.0
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 2, 0)
+#ifndef ESP_PARTITION_SUBTYPE_DATA_LITTLEFS
+#define ESP_PARTITION_SUBTYPE_DATA_LITTLEFS 0x83
+#endif
+#endif
+
 /**
  * @brief littlefs DIR structure
  */
