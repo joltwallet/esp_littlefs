@@ -243,7 +243,7 @@ menu "LittleFS"
 
         config LITTLEFS_MALLOC_STRATEGY_SPIRAM
             bool "SPIRAM heap"
-            depends on SPIRAM_USE_MALLOC && ESP32_SPIRAM_SUPPORT
+            depends on SPIRAM_USE_MALLOC || SPIRAM_USE_CAPS_ALLOC
             help
                 Uses ESP-IDF heap_caps_malloc to allocate from SPIRAM heap.
 
