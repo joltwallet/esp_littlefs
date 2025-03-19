@@ -255,4 +255,12 @@ menu "LittleFS"
         help
             Selects whether littlefs performs runtime assert checks.
 
+    config LITTLEFS_MMAP_PARTITION
+        bool "Memory map LITTLEFS partitions"
+        default "n"
+        help
+            Use esp_partition_mmap to map the partitions to memory, which can provide a significant
+            performance boost in some cases. Make sure the chip you're using has enough available address
+            space to map the partition (for the ESP32 there is 4MB available).
+
 endmenu
