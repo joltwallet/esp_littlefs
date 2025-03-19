@@ -736,6 +736,11 @@ static void esp_littlefs_free(esp_littlefs_t ** efs)
         free(e->fs);
     }
     if(e->lock) vSemaphoreDelete(e->lock);
+
+#ifdef CONFIG_LITTLEFS_MMAP_PARTITION
+    esp_partition_munmap(e->mmap_handle);
+#endif
+
     esp_littlefs_free_fds(e);
     free(e);
 }
@@ -976,12 +981,24 @@ static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition
     }
     (*efs)->partition = partition;
 
+#ifdef CONFIG_LITTLEFS_MMAP_PARTITION
+    esp_err_t err = esp_partition_mmap(partition, 0, partition->size, SPI_FLASH_MMAP_DATA, &(*efs)->mmap_data, &(*efs)->mmap_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "esp_littlefs could not map data");
+        return err;
+    }
+#endif
+
     { /* LittleFS Configuration */
         (*efs)->cfg.context = *efs;
         (*efs)->read_only = read_only;
 
         // block device operations
+#ifdef CONFIG_LITTLEFS_MMAP_PARTITION
+        (*efs)->cfg.read  = littlefs_esp_part_read_mmap;
+#else
         (*efs)->cfg.read  = littlefs_esp_part_read;
+#endif
         (*efs)->cfg.prog  = littlefs_esp_part_write;
         (*efs)->cfg.erase = littlefs_esp_part_erase;
         (*efs)->cfg.sync  = littlefs_esp_part_sync;
