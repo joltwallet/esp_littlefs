@@ -263,4 +263,11 @@ menu "LittleFS"
             performance boost in some cases. Make sure the chip you're using has enough available address
             space to map the partition (for the ESP32 there is 4MB available).
 
+    config LITTLEFS_WDT_RESET
+        bool "Reset task watchdog during flash operations"
+        default "n"
+        help
+            Enable calling esp_task_wdt_reset() during flash read/write/erase operations
+            to prevent task watchdog timeouts during long-running filesystem operations.
+
 endmenu
