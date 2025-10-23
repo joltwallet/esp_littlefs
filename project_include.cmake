@@ -36,9 +36,26 @@ function(littlefs_create_partition_image partition base_dir)
 			)
 		else()
 			set(littlefs_py "${littlefs_py_venv}/bin/littlefs-python")
+			# -----------------------------------------------------------------------------
+    		# NOTE:
+    		# During the build phase, create a Python virtual environment
+    		# for LittleFS image generation. Before running pip installation,
+    		# all SOCKS/HTTP proxy-related environment variables are cleared
+    		# to prevent "Missing dependencies for SOCKS support" errors
+    		# caused by pip attempting to load PySocks.
+    		# -----------------------------------------------------------------------------
 			add_custom_command(
 					OUTPUT ${littlefs_py_venv}
-					COMMAND ${PYTHON} -m venv ${littlefs_py_venv} && ${littlefs_py_venv}/bin/pip install -r ${littlefs_py_requirements}
+					COMMAND ${PYTHON} -m venv ${littlefs_py_venv}
+            		COMMAND env
+            		    PIP_NO_PROXY="*"
+            		    ALL_PROXY=""
+            		    all_proxy=""
+            		    HTTP_PROXY=""
+            		    http_proxy=""
+            		    HTTPS_PROXY=""
+            		    https_proxy=""
+            		    ${littlefs_py_venv}/bin/pip install -r ${littlefs_py_requirements}
 					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 					DEPENDS ${littlefs_py_requirements}
 			)
