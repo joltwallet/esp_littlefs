@@ -1,1 +1,1 @@
-littlefs-python==0.13.3
+littlefs-python==0.15.0
