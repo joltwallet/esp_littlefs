@@ -425,6 +425,47 @@ static esp_vfs_fs_ops_t s_vfs_littlefs = {
 };
 
 #endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+
+
+lfs_t * esp_littlefs_lvgl_port_init(const esp_vfs_littlefs_conf_t * conf)
+{
+    int index;
+    assert(conf->base_path);
+    esp_err_t err = esp_littlefs_init(conf, &index);
+    if (err != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize LittleFS");
+        return NULL;
+    }
+    
+    strlcat(_efs[index]->base_path, conf->base_path, ESP_VFS_PATH_MAX + 1);
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+    int flags = ESP_VFS_FLAG_CONTEXT_PTR | ESP_VFS_FLAG_STATIC; 
+    if (conf->read_only) {
+        flags |= ESP_VFS_FLAG_READONLY_FS;
+    }
+    err = esp_vfs_register_fs(conf->base_path, &s_vfs_littlefs, flags, _efs[index]);
+#else
+    err = esp_vfs_register(conf->base_path, &vfs, _efs[index]);
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+    if (err != ESP_OK) {
+        esp_littlefs_free(&_efs[index]);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to register Littlefs to \"%s\"", conf->base_path);
+        return NULL;
+    }
+    size_t total = 0, used = 0;
+    esp_err_t ret_val = esp_littlefs_info(conf->partition_label, &total, &used);
+    if (ret_val != ESP_OK)
+    {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to get LittleFs partition information (%s)", esp_err_to_name(ret_val));
+    }
+    else
+    {
+        ESP_LOGI(ESP_LITTLEFS_TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+
+    return _efs[index]->fs;
+}
+
 esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t * conf)
 {
     int index;

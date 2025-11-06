@@ -49,6 +49,27 @@ typedef struct {
 } esp_vfs_littlefs_conf_t;
 
 /**
+ * Initialize and mount LittleFS for LVGL integration.
+ *
+ * This helper initializes a LittleFS instance using the given configuration
+ * and returns a pointer to the underlying lfs_t object, allowing direct access
+ * for LVGL file system operations.
+ *
+ * Unlike esp_vfs_littlefs_register(), this function does not register
+ * the filesystem to ESP-IDF VFS. It is designed for use cases where LVGL
+ * manages file access directly through lv_fs API.
+
+ *
+ * @param   conf                      Pointer to esp_vfs_littlefs_conf_t configuration structure
+ *
+ * @return  
+ *          - Pointer to lfs_t        if initialization and mount succeed  
+ *          - NULL                    if initialization or mount fails
+ */
+lfs_t * esp_littlefs_lvgl_port_init(const esp_vfs_littlefs_conf_t * conf);
+
+
+/**
  * Register and mount (if configured to) littlefs to VFS with given path prefix.
  *
  * @param   conf                      Pointer to esp_vfs_littlefs_conf_t configuration structure
