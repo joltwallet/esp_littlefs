@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include "esp_partition.h"
 
+#include "littlefs/lfs.h"
+
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
 #endif
