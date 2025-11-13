@@ -22,6 +22,7 @@
 #include <sys/fcntl.h>
 #include <sys/lock.h>
 #include <sys/param.h>
+#include <time.h>
 #include <unistd.h>
 #include "esp_random.h"
 
