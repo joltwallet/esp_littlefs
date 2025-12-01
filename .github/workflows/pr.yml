@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["release-v5.0", "release-v5.1", "release-v5.2", "release-v5.3", "release-v5.4"] # re-add "latest" once we support v6.0
+        idf_ver: ["release-v5.0", "release-v5.1", "release-v5.2", "release-v5.3", "release-v5.4", "release-v6.0", "latest"]
         idf_target: ["esp32"]
         include:
           - idf_ver: "release-v5.2"
@@ -25,6 +25,10 @@ jobs:
             idf_target: esp32c3
           - idf_ver: "release-v5.2"
             idf_target: esp32s3
+          - idf_ver: "latest"
+            idf_target: esp32c6
+          - idf_ver: "latest"
+            idf_target: esp32p4
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

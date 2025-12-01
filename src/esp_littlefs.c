@@ -17,6 +17,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "littlefs_api.h"
+#include <dirent.h>
 #include <sys/dirent.h>
 #include <sys/errno.h>
 #include <sys/fcntl.h>
@@ -36,24 +37,7 @@
 #endif
 
 #include "spi_flash_mmap.h"
-
-#if CONFIG_IDF_TARGET_ESP32
-#include "esp32/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include "esp32s3/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP32C3
-#include "esp32c3/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP32H2
-#include "esp32h2/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP8684
-#include "esp8684/rom/spi_flash.h"
-#elif __has_include("esp32/rom/spi_flash.h")
-#include "esp32/rom/spi_flash.h" //IDF 4
-#else
-#include "rom/spi_flash.h" //IDF 3
-#endif
+#include "esp_rom_spiflash.h"
 
 #define CONFIG_LITTLEFS_BLOCK_SIZE 4096 /* ESP32 can only operate at 4kb */
 
