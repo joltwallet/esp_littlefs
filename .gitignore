@@ -7,5 +7,10 @@ example/sdkconfig
 example/sdkconfig.old
 example/dependencies.lock
 
+test_apps/build/
+test_apps/sdkconfig
+test_apps/sdkconfig.old
+test_apps/dependencies.lock
+
 *.DS_Store
 */.cache

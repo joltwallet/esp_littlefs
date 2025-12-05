@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_ver: ["release-v5.0", "release-v5.1", "release-v5.2", "release-v5.3", "release-v5.4"] # re-add "latest" once we support v6.0
+        idf_ver: ["release-v5.0", "release-v5.1", "release-v5.2", "release-v5.3", "release-v5.4", "release-v6.0", "latest"]
         idf_target: ["esp32"]
         include:
           - idf_ver: "release-v5.2"
@@ -25,6 +25,10 @@ jobs:
             idf_target: esp32c3
           - idf_ver: "release-v5.2"
             idf_target: esp32s3
+          - idf_ver: "latest"
+            idf_target: esp32c6
+          - idf_ver: "latest"
+            idf_target: esp32p4
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +52,20 @@ jobs:
           path: "example/"
           command: apt-get update && apt-get install -y python3-venv && idf.py --version && idf.py build
 
-      - name: esp-idf build tests
+      # ESP-IDF v5.x: Use legacy unit-test-app
+      - name: esp-idf build tests (v5.x)
+        if: ${{ !contains(matrix.idf_ver, 'v6.') && matrix.idf_ver != 'latest' }}
         uses: espressif/esp-idf-ci-action@main
         with:
           esp_idf_version: ${{ matrix.idf_ver }}
           command: '/bin/bash -c " ln -s /app /opt/esp/idf/tools/unit-test-app/components/littlefs; cd /opt/esp/idf/tools/unit-test-app; idf.py -T littlefs build"'
+
+      # ESP-IDF v6.0+: Use new test_apps structure
+      - name: esp-idf build tests (v6.0+)
+        if: ${{ contains(matrix.idf_ver, 'v6.') || matrix.idf_ver == 'latest' }}
+        uses: espressif/esp-idf-ci-action@main
+        with:
+          esp_idf_version: ${{ matrix.idf_ver }}
+          target: ${{ matrix.idf_target }}
+          path: "test_apps/"
+          command: idf.py build
