@@ -52,8 +52,20 @@ jobs:
           path: "example/"
           command: apt-get update && apt-get install -y python3-venv && idf.py --version && idf.py build
 
-      - name: esp-idf build tests
+      # ESP-IDF v5.x: Use legacy unit-test-app
+      - name: esp-idf build tests (v5.x)
+        if: ${{ !contains(matrix.idf_ver, 'v6.') && matrix.idf_ver != 'latest' }}
         uses: espressif/esp-idf-ci-action@main
         with:
           esp_idf_version: ${{ matrix.idf_ver }}
           command: '/bin/bash -c " ln -s /app /opt/esp/idf/tools/unit-test-app/components/littlefs; cd /opt/esp/idf/tools/unit-test-app; idf.py -T littlefs build"'
+
+      # ESP-IDF v6.0+: Use new test_apps structure
+      - name: esp-idf build tests (v6.0+)
+        if: ${{ contains(matrix.idf_ver, 'v6.') || matrix.idf_ver == 'latest' }}
+        uses: espressif/esp-idf-ci-action@main
+        with:
+          esp_idf_version: ${{ matrix.idf_ver }}
+          target: ${{ matrix.idf_target }}
+          path: "test_apps/"
+          command: idf.py build
