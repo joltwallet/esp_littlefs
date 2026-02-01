@@ -2382,7 +2382,7 @@ static int esp_littlefs_update_mtime_attr(esp_littlefs_t *efs, const char *path,
  */
 static time_t esp_littlefs_get_updated_time(esp_littlefs_t *efs, vfs_littlefs_file_t *file, const char *path)
 {
-    time_t t;
+    time_t t = 0;
 #if CONFIG_LITTLEFS_MTIME_USE_SECONDS
     // use current time
     t = time(NULL);
