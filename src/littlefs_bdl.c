@@ -79,6 +79,7 @@ int littlefs_bdl_read(const struct lfs_config *c, lfs_block_t block,
         return LFS_ERR_IO;
     }
 
+    /* dst_buf_size == data_read_len because LittleFS always provides an exact-sized buffer */
     esp_err_t err = dev->ops->read(dev, (uint8_t *)buffer, size, addr, size);
     if (err != ESP_OK) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "BDL read failed: addr=0x%016" PRIx64 ", size=0x%08x, err=0x%x",
