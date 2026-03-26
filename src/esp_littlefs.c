@@ -1363,7 +1363,6 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
             ESP_LOGE(ESP_LITTLEFS_TAG, "Failed when checking SD card status: 0x%x", err);
             goto exit;
         }
-    }
 #endif
 #if ESP_LITTLEFS_HAS_BLOCKDEV
     } else if (conf->blockdev) {
@@ -1372,13 +1371,8 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
             err = ESP_ERR_INVALID_STATE;
             goto exit;
         }
-    }
 #endif
-#if defined(CONFIG_LITTLEFS_SDMMC_SUPPORT) || ESP_LITTLEFS_HAS_BLOCKDEV
-    else {
-#else
     } else {
-#endif
         // Find first partition with "littlefs" subtype.
         partition = esp_partition_find_first(
                 ESP_PARTITION_TYPE_DATA,
