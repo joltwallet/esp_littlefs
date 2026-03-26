@@ -1472,11 +1472,10 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
 
 exit:
     if(err != ESP_OK){
+        esp_littlefs_free(&efs);
+        /* efs may or may not have been published to _efs[*index]; clear it either way. */
         if( *index >= 0 ) {
-            esp_littlefs_free(&_efs[*index]);
-        }
-        else{
-            esp_littlefs_free(&efs);
+            _efs[*index] = NULL;
         }
     }
     xSemaphoreGive(_efs_lock);
