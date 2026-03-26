@@ -22,7 +22,7 @@ static esp_partition_t get_test_data_static_partition(void)
         .type       = ESP_PARTITION_TYPE_DATA,
         .subtype    = ESP_PARTITION_SUBTYPE_DATA_FAT,
         .address    = spi_flash_cache2phys(partition_blob_start),
-        .size       = ((uint32_t)partition_blob_end) - ((uint32_t)partition_blob_start),
+        .size       = ((uintptr_t)partition_blob_end) - ((uintptr_t)partition_blob_start),
         .erase_size = SPI_FLASH_SEC_SIZE, /* match flash sector & embedded LittleFS image block size */
         .label      = "",
         .encrypted  = false,
