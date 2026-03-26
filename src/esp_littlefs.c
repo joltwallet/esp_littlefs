@@ -1091,26 +1091,44 @@ static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sd
 #endif // CONFIG_LITTLEFS_SDMMC_SUPPORT
 
 #if ESP_LITTLEFS_HAS_BLOCKDEV
+static size_t gcd(size_t a, size_t b)
+{
+    while (b) {
+        size_t t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
 /**
  * LittleFS requires cache_size % read_size == 0, cache_size % prog_size == 0, and block_size % cache_size == 0.
  *
  * Each open file uses vfs_littlefs_file_t::lfs_buffer[CONFIG_LITTLEFS_CACHE_SIZE] for lfs_file_config.buffer,
  * so cfg.cache_size must never exceed CONFIG_LITTLEFS_CACHE_SIZE (otherwise the VFS corrupts adjacent fields).
+ *
+ * Callers must ensure block_sz % read_sz == 0 and block_sz % prog_sz == 0.
  */
 static size_t esp_littlefs_bdl_pick_cache_size(size_t block_sz, size_t read_sz, size_t prog_sz)
 {
+    size_t unit = read_sz / gcd(read_sz, prog_sz) * prog_sz; /* lcm(read_sz, prog_sz) */
+
     size_t max_cache = CONFIG_LITTLEFS_CACHE_SIZE;
     if (max_cache > block_sz) {
         max_cache = block_sz;
     }
-    for (size_t c = max_cache; c > 0; --c) {
-        if (block_sz % c == 0 && c % read_sz == 0 && c % prog_sz == 0) {
-            return c;
-        }
+
+    /* Round max_cache down to the nearest multiple of unit.
+     * Because callers guarantee block_sz % unit == 0, any multiple of unit
+     * that is <= block_sz will also divide block_sz. */
+    size_t c = (max_cache / unit) * unit;
+    assert(c == 0 || block_sz % c == 0);
+
+    if (c == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "No valid cache_size <= %u for block=%u read=%u prog=%u",
+                 (unsigned)max_cache, (unsigned)block_sz, (unsigned)read_sz, (unsigned)prog_sz);
     }
-    ESP_LOGE(ESP_LITTLEFS_TAG, "No valid cache_size <= %u for block=%u read=%u prog=%u",
-             (unsigned)max_cache, (unsigned)block_sz, (unsigned)read_sz, (unsigned)prog_sz);
-    return 0;
+    return c;
 }
 
 static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_handle_t blockdev, bool read_only)
@@ -1190,8 +1208,6 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
         }
         (*efs)->cfg.cache_size = esp_littlefs_bdl_pick_cache_size(erase_size, read_size, write_size);
         if ((*efs)->cfg.cache_size == 0) {
-            free(*efs);
-            *efs = NULL;
             return ESP_ERR_INVALID_ARG;
         }
         (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
