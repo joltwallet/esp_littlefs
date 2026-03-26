@@ -944,7 +944,7 @@ static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index)
 #if ESP_LITTLEFS_HAS_BLOCKDEV
 /**
  * Get a mounted littlefs filesystem by blockdev.
- * @param[in] label
+ * @param[in] blockdev
  * @param[out] index index into _efs
  * @return ESP_OK on success
  */
