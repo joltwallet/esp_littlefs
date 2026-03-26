@@ -67,6 +67,8 @@ typedef struct {
     lfs_t *fs;                                /*!< Handle to the underlying littlefs */
     SemaphoreHandle_t lock;                   /*!< FS lock */
 
+    // TODO(next major release): partition, sdcard, and bdl_handle are mutually exclusive
+    // and should be refactored into a union with a backend_type discriminator.
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     sdmmc_card_t *sdcard;                     /*!< The SD card driver handle on which littlefs is located */
 #endif
