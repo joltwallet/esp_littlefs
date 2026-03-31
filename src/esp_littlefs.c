@@ -706,7 +706,11 @@ esp_err_t esp_littlefs_format_blockdev(esp_blockdev_handle_t blockdev)
     err = format_from_efs(_efs[index]);
 
 exit:
-    if (efs_free && index>=0) esp_littlefs_free(&_efs[index]);
+    if (efs_free && index >= 0 && _efs[index]) {
+        /* Formatting through a temporary EFS context must not consume caller-owned handles. */
+        _efs[index]->bdl_handle = NULL;
+        esp_littlefs_free(&_efs[index]);
+    }
     return err;
 }
 #endif
@@ -1101,6 +1105,14 @@ static size_t gcd(size_t a, size_t b)
     return a;
 }
 
+static size_t lcm_size(size_t a, size_t b)
+{
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    return a / gcd(a, b) * b;
+}
+
 /**
  * LittleFS requires cache_size % read_size == 0, cache_size % prog_size == 0, and block_size % cache_size == 0.
  *
@@ -1133,6 +1145,43 @@ static size_t esp_littlefs_bdl_pick_cache_size(size_t block_sz, size_t read_sz, 
 
 static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_handle_t blockdev, bool read_only)
 {
+    const esp_blockdev_flags_t *f = &blockdev->device_flags;
+    const esp_blockdev_ops_t *ops = blockdev->ops;
+
+    if (!ops || !ops->read) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL device must provide read operation");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    if (f->encrypted) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL encrypted block devices are not supported");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    /* LittleFS assumes erased storage reads as 0xFF (all bits 1). */
+    if (!f->default_val_after_erase) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL requires default_val_after_erase=1 (0xFF erased state)");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    /*
+     * Use BDL flags only to determine effective LittleFS block sizing mode:
+     * - classic: any erase-dependent/program-constrained medium
+     * - logical: neither erase_before_write nor and_type_write are set
+     */
+    const bool classic = f->erase_before_write || f->and_type_write;
+    const bool logical = !classic;
+
+    if (!read_only && blockdev->device_flags.read_only) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Refusing to mount read-only block dev for write");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!read_only && (!ops->write || !ops->erase)) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Writable LittleFS mount requires BDL write and erase operations");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
     /* Allocate Context */
     *efs = esp_littlefs_calloc(1, sizeof(esp_littlefs_t));
     if (*efs == NULL) {
@@ -1141,6 +1190,7 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
     }
 
     (*efs)->bdl_handle = blockdev;
+    (*efs)->bdl_logical_block_mode = logical;
 
     const esp_blockdev_geometry_t *g = &blockdev->geometry;
     if (g->read_size == 0 || g->disk_size == 0) {
@@ -1149,15 +1199,15 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!read_only && blockdev->device_flags.read_only) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "Refusing to mount read-only block dev for write");
+    /* Classic (erase_before_write): non-zero program and erase units; partition BDL reports them for read-only media too. */
+    if (classic && (g->erase_size == 0 || g->write_size == 0)) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry (write_size=%u erase_size=%u)",
+                 (unsigned)g->write_size, (unsigned)g->erase_size);
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* LittleFS needs non-zero program and erase units; partition BDL reports them for read-only media too. */
-    if (g->erase_size == 0 || g->write_size == 0) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry (write_size=%u erase_size=%u)",
-                 (unsigned)g->write_size, (unsigned)g->erase_size);
+    if (logical && g->write_size == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry for logical BDL mode (write_size=0)");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -1169,10 +1219,23 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
             (g->recommended_write_size > 0 && g->recommended_write_size % g->write_size == 0)
                     ? g->recommended_write_size
                     : g->write_size;
-    size_t erase_size =
-            (g->recommended_erase_size > 0 && g->recommended_erase_size % g->erase_size == 0)
-                    ? g->recommended_erase_size
-                    : g->erase_size;
+
+    size_t erase_size;
+    if (classic) {
+        erase_size =
+                (g->recommended_erase_size > 0 && g->recommended_erase_size % g->erase_size == 0)
+                        ? g->recommended_erase_size
+                        : g->erase_size;
+    } else {
+        /* Logical block size: lcm(read, prog); ignore huge physical erase_size for LFS block boundaries. */
+        erase_size = lcm_size(read_size, write_size);
+        if (erase_size == 0 || (g->disk_size % erase_size) != 0) {
+            ESP_LOGE(ESP_LITTLEFS_TAG,
+                     "Logical BDL: disk_size (%" PRIu64 ") must be a non-zero multiple of lcm(read_size=%u, prog_size=%u) (%u)",
+                     (uint64_t)g->disk_size, (unsigned)read_size, (unsigned)write_size, (unsigned)erase_size);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
 
     if (read_size > erase_size || write_size > erase_size) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "read_size (%u) and prog_size (%u) must not exceed block_size (%u)",
@@ -1181,7 +1244,7 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
     }
 
     if (erase_size % read_size != 0 || erase_size % write_size != 0) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "erase_size (%u) must be a multiple of read_size (%u) and prog_size (%u)",
+        ESP_LOGE(ESP_LITTLEFS_TAG, "block_size (%u) must be a multiple of read_size (%u) and prog_size (%u)",
                  (unsigned)erase_size, (unsigned)read_size, (unsigned)write_size);
         return ESP_ERR_INVALID_ARG;
     }
@@ -1482,10 +1545,14 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
 
 exit:
     if(err != ESP_OK){
-        esp_littlefs_free(&efs);
-        /* efs may or may not have been published to _efs[*index]; clear it either way. */
-        if( *index >= 0 ) {
-            _efs[*index] = NULL;
+        /*
+         * Only tear down _efs[*index] when this call published the same context there.
+         * Otherwise, leave pre-existing mounts untouched (e.g. duplicate-register checks).
+         */
+        if (*index >= 0 && _efs[*index] == efs) {
+            esp_littlefs_free(&_efs[*index]);
+        } else {
+            esp_littlefs_free(&efs);
         }
     }
     xSemaphoreGive(_efs_lock);

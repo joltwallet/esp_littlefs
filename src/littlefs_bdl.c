@@ -132,24 +132,39 @@ int littlefs_bdl_erase(const struct lfs_config *c, lfs_block_t block)
 {
     esp_littlefs_t *efs = (esp_littlefs_t *)c->context;
     esp_blockdev_handle_t dev = efs ? efs->bdl_handle : NULL;
-    if (!validate_handle(dev, "erase") || !dev->ops->erase) {
+    if (!validate_handle(dev, "erase")) {
         return LFS_ERR_IO;
     }
 
-    if ((efs && efs->read_only) || dev->device_flags.read_only || dev->geometry.erase_size == 0) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL erase not supported (read-only or erase_size=0)");
+    if ((efs && efs->read_only) || dev->device_flags.read_only) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL erase not supported (read-only)");
         return LFS_ERR_IO;
     }
 
     const uint64_t addr = (uint64_t)block * c->block_size;
     const size_t erase_len = c->block_size;
+    const bool logical = efs && efs->bdl_logical_block_mode;
+
+    /*
+     * Logical BDL mode (erase_before_write=0): LittleFS block_size may be smaller than geometry.erase_size.
+     * Skip alignment to geometry.erase_size; erase operation is still required for LittleFS compatibility.
+     */
+    if (!dev->ops->erase) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL erase not supported (missing erase op)");
+        return LFS_ERR_IO;
+    }
+
+    if (!logical && dev->geometry.erase_size == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL erase not supported (erase_size=0)");
+        return LFS_ERR_IO;
+    }
 
 #ifdef CONFIG_LITTLEFS_WDT_RESET
     esp_task_wdt_reset();
 #endif
 
-    /* Basic alignment check against device geometry if provided */
-    if (dev->geometry.erase_size &&
+    /* Classic (erase_before_write=1): logical blocks align to geometry.erase_size. */
+    if (!logical && dev->geometry.erase_size &&
         ((addr % dev->geometry.erase_size) || (erase_len % dev->geometry.erase_size))) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "BDL erase misaligned: addr=0x%016" PRIx64 ", len=0x%08x, erase_size=0x%08x",
                  addr, (unsigned)erase_len, (unsigned)dev->geometry.erase_size);

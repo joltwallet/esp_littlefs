@@ -76,6 +76,9 @@ typedef struct {
     const esp_partition_t* partition;         /*!< The partition on which littlefs is located */
 #if ESP_LITTLEFS_HAS_BLOCKDEV
     esp_blockdev_handle_t  bdl_handle;          /*!< Optional block device layer handle backing LittleFS */
+    /** When true, BDL \c erase_before_write is false: LittleFS \c block_size is derived from read/program sizes
+     *  (not geometry \c erase_size). Physical erase alignment is not enforced in this path. */
+    bool                   bdl_logical_block_mode;
 #endif
 
 #ifdef CONFIG_LITTLEFS_MMAP_PARTITION

@@ -54,9 +54,14 @@ typedef struct {
 #if ESP_LITTLEFS_HAS_BLOCKDEV
     /**
      * Block device for LittleFS when partition_label, partition, and sdcard (when enabled) are not used.
-     * Use an `esp_blockdev` whose geometry matches the filesystem (read / program / erase sizes).
-     * For `esp_partition_ptr_get_blockdev()`, use an ESP-IDF build where partition BDL reports full geometry
-     * for read-only partitions (e.g. Espressif GitLab MR !45695).
+     *
+     * `device_flags` on the handle are validated at mount:
+     * - `encrypted` — mount fails (not supported).
+     * - `default_val_after_erase` — must be 1 (LittleFS expects 0xFF after erase).
+     * - `erase_before_write` and `and_type_write` are used only to select block sizing mode:
+     *   - classic mode (either flag set): `lfs` `block_size` uses geometry erase size.
+     *   - logical mode (both flags clear): `lfs` `block_size` uses lcm(read, prog).
+     *
      * If the device provides `ops->release`, it is called when the filesystem is torn down
      * (e.g. `esp_vfs_littlefs_unregister_blockdev`).
      */
@@ -218,6 +223,7 @@ esp_err_t esp_littlefs_format_sdmmc(sdmmc_card_t *sdcard);
  * Format the littlefs blockdev
  *
  * @param blockdev  blockdev to format.
+ * @note This call does not transfer ownership and does not invoke `blockdev->ops->release`.
  * @return
  *          - ESP_OK      if successful
  *          - ESP_FAIL    on error
