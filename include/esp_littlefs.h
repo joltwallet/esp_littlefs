@@ -7,6 +7,14 @@
 #include <stdbool.h>
 #include "esp_partition.h"
 
+/** LittleFS over ESP-IDF Block Device Layer (`esp_blockdev`) is only built on ESP-IDF 6+ (non-ESP8266). */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0) && !defined(ESP8266)
+#define ESP_LITTLEFS_HAS_BLOCKDEV 1
+#include "esp_blockdev.h"
+#else
+#define ESP_LITTLEFS_HAS_BLOCKDEV 0
+#endif
+
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 #include <sdmmc_cmd.h>
 #endif
@@ -34,12 +42,30 @@ extern "C" {
  */
 typedef struct {
     const char *base_path;            /**< Mounting point. */
-    const char *partition_label;      /**< Label of partition to use. If partition_label, partition, and sdcard are all NULL,
-                                           then the first partition with data subtype 'littlefs' will be used. */
+    const char *partition_label;      /**< Label of partition to use. If no mount source is set (partition_label,
+                                           partition, optional sdcard, optional blockdev on ESP-IDF 6+), the first data
+                                           partition with subtype 'littlefs' is used. */
     const esp_partition_t* partition; /**< partition to use if partition_label is NULL */
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
     sdmmc_card_t *sdcard;       /**< SD card handle to use if both esp_partition handle & partition label is NULL */
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+    /**
+     * Block device for LittleFS when partition_label, partition, and sdcard (when enabled) are not used.
+     *
+     * `device_flags` on the handle are validated at mount:
+     * - `encrypted` — mount fails (not supported).
+     * - `default_val_after_erase` — must be 1 (LittleFS expects 0xFF after erase).
+     * - `erase_before_write` and `and_type_write` are used only to select block sizing mode:
+     *   - classic mode (either flag set): `lfs` `block_size` uses geometry erase size.
+     *   - logical mode (both flags clear): `lfs` `block_size` uses lcm(read, prog).
+     *
+     * If the device provides `ops->release`, it is called when the filesystem is torn down
+     * (e.g. `esp_vfs_littlefs_unregister_blockdev`).
+     */
+    esp_blockdev_handle_t blockdev;
 #endif
 
     uint8_t format_if_mount_failed:1; /**< Format the file system if it fails to mount. */
@@ -97,6 +123,21 @@ esp_err_t esp_vfs_littlefs_unregister_sdmmc(sdmmc_card_t *sdcard);
  */
 esp_err_t esp_vfs_littlefs_unregister_partition(const esp_partition_t* partition);
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+/**
+ * Unregister and unmount littlefs from VFS.
+ *
+ * @param blockdev  blockdev to unregister.
+ *
+ * @return
+ *          - ESP_OK if successful
+ *          - ESP_ERR_INVALID_STATE already unregistered
+ *
+ * @note Invokes `blockdev->ops->release` when present; the handle must not be used afterward.
+ */
+esp_err_t esp_vfs_littlefs_unregister_blockdev(esp_blockdev_handle_t blockdev);
+#endif
+
 /**
  * Check if littlefs is mounted
  *
@@ -132,6 +173,19 @@ bool esp_littlefs_partition_mounted(const esp_partition_t* partition);
 bool esp_littlefs_sdmmc_mounted(sdmmc_card_t *sdcard);
 #endif
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+/**
+ * Check if littlefs is mounted
+ *
+ * @param blockdev  blockdev to check.
+ *
+ * @return  
+ *          - true    if mounted
+ *          - false   if not mounted
+ */
+bool esp_littlefs_blockdev_mounted(esp_blockdev_handle_t blockdev);
+#endif
+
 /**
  * Format the littlefs partition
  *
@@ -162,6 +216,19 @@ esp_err_t esp_littlefs_format_partition(const esp_partition_t* partition);
  *          - ESP_FAIL    on error
  */
 esp_err_t esp_littlefs_format_sdmmc(sdmmc_card_t *sdcard);
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+/**
+ * Format the littlefs blockdev
+ *
+ * @param blockdev  blockdev to format.
+ * @note This call does not transfer ownership and does not invoke `blockdev->ops->release`.
+ * @return
+ *          - ESP_OK      if successful
+ *          - ESP_FAIL    on error
+ */
+esp_err_t esp_littlefs_format_blockdev(esp_blockdev_handle_t blockdev);
 #endif
 
 /**
@@ -203,6 +270,21 @@ esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
 esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, size_t *used_bytes);
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+/**
+ * Get information for littlefs
+ *
+ * @param blockdev                  the blockdev to get info for.
+ * @param[out] total_bytes          Size of the file system
+ * @param[out] used_bytes           Current used bytes in the file system
+ *
+ * @return  
+ *          - ESP_OK                  if success
+ *          - ESP_ERR_INVALID_STATE   if not mounted
+ */
+esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, size_t *total_bytes, size_t *used_bytes);
 #endif
 
 #ifdef __cplusplus

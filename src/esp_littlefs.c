@@ -17,6 +17,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "littlefs_api.h"
+#include <inttypes.h>
 #include <dirent.h>
 #include <sys/dirent.h>
 #include <sys/errno.h>
@@ -117,6 +118,9 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
 
 static esp_err_t esp_littlefs_by_label(const char* label, int * index);
 static esp_err_t esp_littlefs_by_partition(const esp_partition_t* part, int*index);
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+static esp_err_t esp_littlefs_by_blockdev(esp_blockdev_handle_t blockdev, int * index);
+#endif
 static int esp_littlefs_file_sync(esp_littlefs_t *efs, vfs_littlefs_file_t *file);
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
@@ -126,6 +130,9 @@ static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index);
 static esp_err_t esp_littlefs_get_empty(int *index);
 static void      esp_littlefs_free(esp_littlefs_t ** efs);
 static int       esp_littlefs_flags_conv(int m);
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_handle_t blockdev, bool read_only);
+#endif
 
 #if CONFIG_LITTLEFS_USE_MTIME
 static int       vfs_littlefs_utime(void *ctx, const char *path, const struct utimbuf *times);
@@ -254,6 +261,13 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
             res = lfs_format(efs->fs, &efs->cfg);
         } else
 #endif
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+        if (efs->bdl_handle) {
+            const esp_blockdev_geometry_t *g = &efs->bdl_handle->geometry;
+            efs->cfg.block_count = g->disk_size ? g->disk_size / efs->cfg.block_size : efs->cfg.block_count;
+            res = lfs_format(efs->fs, &efs->cfg);
+        } else
+#endif
         {
             efs->cfg.block_count = efs->partition->size / efs->cfg.block_size;
             res = lfs_format(efs->fs, &efs->cfg);
@@ -328,6 +342,17 @@ bool esp_littlefs_sdmmc_mounted(sdmmc_card_t *sdcard)
 }
 #endif
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+bool esp_littlefs_blockdev_mounted(esp_blockdev_handle_t blockdev)
+{
+    int index;
+    esp_err_t err = esp_littlefs_by_blockdev(blockdev, &index);
+
+    if (err != ESP_OK) return false;
+    return _efs[index]->cache_size > 0;
+}
+#endif
+
 esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, size_t *used_bytes){
     int index;
     esp_err_t err;
@@ -358,6 +383,20 @@ esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, siz
 
     err = esp_littlefs_by_sdmmc_handle(sdcard, &index);
     if(err != ESP_OK) return err;
+    get_total_and_used_bytes(_efs[index], total_bytes, used_bytes);
+
+    return ESP_OK;
+}
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, size_t *total_bytes, size_t *used_bytes)
+{
+    int index;
+    esp_err_t err;
+
+    err = esp_littlefs_by_blockdev(blockdev, &index);
+    if (err != ESP_OK) return err;
     get_total_and_used_bytes(_efs[index], total_bytes, used_bytes);
 
     return ESP_OK;
@@ -503,6 +542,28 @@ esp_err_t esp_vfs_littlefs_unregister_partition(const esp_partition_t* partition
     return ESP_OK;
 }
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+esp_err_t esp_vfs_littlefs_unregister_blockdev(esp_blockdev_handle_t blockdev)
+{
+    assert(blockdev);
+    int index;
+    if (esp_littlefs_by_blockdev(blockdev, &index) != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Blockdev was never registered.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Unregistering blockdev %p", blockdev);
+    esp_err_t err = esp_vfs_unregister(_efs[index]->base_path);
+    if (err != ESP_OK) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to unregister blockdev %p", blockdev);
+        return err;
+    }
+    esp_littlefs_free(&_efs[index]);
+    _efs[index] = NULL;
+    return ESP_OK;
+}
+#endif
+
 esp_err_t esp_littlefs_format(const char* partition_label) {
     bool efs_free = false;
     int index = -1;
@@ -609,6 +670,47 @@ esp_err_t esp_littlefs_format_sdmmc(sdmmc_card_t *sdcard)
 
 exit:
     if(efs_free && index>=0) esp_littlefs_free(&_efs[index]);
+    return err;
+}
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+esp_err_t esp_littlefs_format_blockdev(esp_blockdev_handle_t blockdev)
+{
+    assert(blockdev);
+
+    bool efs_free = false;
+    int index = -1;
+    esp_err_t err;
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Formatting blockdev %p", blockdev);
+
+    /* Get a context */
+    err = esp_littlefs_by_blockdev(blockdev, &index);
+
+    if (err != ESP_OK) {
+        /* Create a tmp context */
+        ESP_LOGV(ESP_LITTLEFS_TAG, "Temporarily creating EFS context.");
+        efs_free = true;
+        const esp_vfs_littlefs_conf_t conf = {
+                .dont_mount = true,
+                .blockdev = blockdev,
+        };
+        err = esp_littlefs_init(&conf, &index);
+        if (err != ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Failed to initialize to format.");
+            goto exit;
+        }
+    }
+
+    err = format_from_efs(_efs[index]);
+
+exit:
+    if (efs_free && index >= 0 && _efs[index]) {
+        /* Formatting through a temporary EFS context must not consume caller-owned handles. */
+        _efs[index]->bdl_handle = NULL;
+        esp_littlefs_free(&_efs[index]);
+    }
     return err;
 }
 #endif
@@ -726,6 +828,14 @@ static void esp_littlefs_free(esp_littlefs_t ** efs)
     esp_partition_munmap(e->mmap_handle);
 #endif
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+    /* optionally release blockdev metadata */
+    if (e->bdl_handle && e->bdl_handle->ops && e->bdl_handle->ops->release) {
+        e->bdl_handle->ops->release(e->bdl_handle);
+        e->bdl_handle = NULL;
+    }
+#endif
+
     esp_littlefs_free_fds(e);
     free(e);
 }
@@ -831,6 +941,34 @@ static esp_err_t esp_littlefs_by_sdmmc_handle(sdmmc_card_t *handle, int *index)
     }
 
     ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem %p not found", handle);
+    return ESP_ERR_NOT_FOUND;
+}
+#endif
+
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+/**
+ * Get a mounted littlefs filesystem by blockdev.
+ * @param[in] blockdev
+ * @param[out] index index into _efs
+ * @return ESP_OK on success
+ */
+static esp_err_t esp_littlefs_by_blockdev(esp_blockdev_handle_t blockdev, int * index){
+    if(!blockdev || !index) return ESP_ERR_INVALID_ARG;
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Searching for existing filesystem for blockdev %p", blockdev);
+
+    for (int i = 0; i < CONFIG_LITTLEFS_MAX_PARTITIONS; i++) {
+        esp_littlefs_t *p = _efs[i];
+        if (!p) continue;
+        if (!p->bdl_handle) continue;
+        if (p->bdl_handle == blockdev) {
+            *index = i;
+            ESP_LOGV(ESP_LITTLEFS_TAG, "Found existing filesystem %p at index %d", blockdev, *index);
+            return ESP_OK;
+        }
+    }
+
+    ESP_LOGV(ESP_LITTLEFS_TAG, "Existing filesystem %p not found", blockdev);
     return ESP_ERR_NOT_FOUND;
 }
 #endif
@@ -956,6 +1094,216 @@ static esp_err_t esp_littlefs_init_sdcard(esp_littlefs_t** efs, sdmmc_card_t* sd
 }
 #endif // CONFIG_LITTLEFS_SDMMC_SUPPORT
 
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+static size_t gcd(size_t a, size_t b)
+{
+    while (b) {
+        size_t t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+static size_t lcm_size(size_t a, size_t b)
+{
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    return a / gcd(a, b) * b;
+}
+
+/**
+ * LittleFS requires cache_size % read_size == 0, cache_size % prog_size == 0, and block_size % cache_size == 0.
+ *
+ * Each open file uses vfs_littlefs_file_t::lfs_buffer[CONFIG_LITTLEFS_CACHE_SIZE] for lfs_file_config.buffer,
+ * so cfg.cache_size must never exceed CONFIG_LITTLEFS_CACHE_SIZE (otherwise the VFS corrupts adjacent fields).
+ *
+ * Callers must ensure block_sz % read_sz == 0 and block_sz % prog_sz == 0.
+ */
+static size_t esp_littlefs_bdl_pick_cache_size(size_t block_sz, size_t read_sz, size_t prog_sz)
+{
+    size_t unit = read_sz / gcd(read_sz, prog_sz) * prog_sz; /* lcm(read_sz, prog_sz) */
+
+    size_t max_cache = CONFIG_LITTLEFS_CACHE_SIZE;
+    if (max_cache > block_sz) {
+        max_cache = block_sz;
+    }
+
+    /* Round max_cache down to the nearest multiple of unit.
+     * Because callers guarantee block_sz % unit == 0, any multiple of unit
+     * that is <= block_sz will also divide block_sz. */
+    size_t c = (max_cache / unit) * unit;
+    assert(c == 0 || block_sz % c == 0);
+
+    if (c == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "No valid cache_size <= %u for block=%u read=%u prog=%u",
+                 (unsigned)max_cache, (unsigned)block_sz, (unsigned)read_sz, (unsigned)prog_sz);
+    }
+    return c;
+}
+
+static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_handle_t blockdev, bool read_only)
+{
+    const esp_blockdev_flags_t *f = &blockdev->device_flags;
+    const esp_blockdev_ops_t *ops = blockdev->ops;
+
+    if (!ops || !ops->read) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL device must provide read operation");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    if (f->encrypted) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL encrypted block devices are not supported");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    /* LittleFS assumes erased storage reads as 0xFF (all bits 1). */
+    if (!f->default_val_after_erase) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL requires default_val_after_erase=1 (0xFF erased state)");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    /*
+     * Use BDL flags only to determine effective LittleFS block sizing mode:
+     * - classic: any erase-dependent/program-constrained medium
+     * - logical: neither erase_before_write nor and_type_write are set
+     */
+    const bool classic = f->erase_before_write || f->and_type_write;
+    const bool logical = !classic;
+
+    if (!read_only && blockdev->device_flags.read_only) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Refusing to mount read-only block dev for write");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!read_only && (!ops->write || !ops->erase)) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Writable LittleFS mount requires BDL write and erase operations");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    /* Allocate Context */
+    *efs = esp_littlefs_calloc(1, sizeof(esp_littlefs_t));
+    if (*efs == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "esp_littlefs could not be malloced");
+        return ESP_ERR_NO_MEM;
+    }
+
+    (*efs)->bdl_handle = blockdev;
+    (*efs)->bdl_logical_block_mode = logical;
+
+    const esp_blockdev_geometry_t *g = &blockdev->geometry;
+    if (g->read_size == 0 || g->disk_size == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry (read_size=%u disk_size=%" PRIu64 ")",
+                 (unsigned)g->read_size, (uint64_t)g->disk_size);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Classic (erase_before_write): non-zero program and erase units; partition BDL reports them for read-only media too. */
+    if (classic && (g->erase_size == 0 || g->write_size == 0)) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry (write_size=%u erase_size=%u)",
+                 (unsigned)g->write_size, (unsigned)g->erase_size);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (logical && g->write_size == 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry for logical BDL mode (write_size=0)");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    size_t read_size =
+            (g->recommended_read_size > 0 && g->recommended_read_size % g->read_size == 0)
+                    ? g->recommended_read_size
+                    : g->read_size;
+    size_t write_size =
+            (g->recommended_write_size > 0 && g->recommended_write_size % g->write_size == 0)
+                    ? g->recommended_write_size
+                    : g->write_size;
+
+    size_t erase_size;
+    if (classic) {
+        erase_size =
+                (g->recommended_erase_size > 0 && g->recommended_erase_size % g->erase_size == 0)
+                        ? g->recommended_erase_size
+                        : g->erase_size;
+    } else {
+        /* Logical block size: lcm(read, prog); ignore huge physical erase_size for LFS block boundaries. */
+        erase_size = lcm_size(read_size, write_size);
+        if (erase_size == 0 || (g->disk_size % erase_size) != 0) {
+            ESP_LOGE(ESP_LITTLEFS_TAG,
+                     "Logical BDL: disk_size (%" PRIu64 ") must be a non-zero multiple of lcm(read_size=%u, prog_size=%u) (%u)",
+                     (uint64_t)g->disk_size, (unsigned)read_size, (unsigned)write_size, (unsigned)erase_size);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+
+    if (read_size > erase_size || write_size > erase_size) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "read_size (%u) and prog_size (%u) must not exceed block_size (%u)",
+                 (unsigned)read_size, (unsigned)write_size, (unsigned)erase_size);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (erase_size % read_size != 0 || erase_size % write_size != 0) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "block_size (%u) must be a multiple of read_size (%u) and prog_size (%u)",
+                 (unsigned)erase_size, (unsigned)read_size, (unsigned)write_size);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    { /* LittleFS Configuration */
+        (*efs)->cfg.context = *efs;
+        (*efs)->read_only = read_only;
+
+        // block device operations
+        (*efs)->cfg.read  = littlefs_bdl_read;
+        (*efs)->cfg.prog  = littlefs_bdl_write;
+        (*efs)->cfg.erase = littlefs_bdl_erase;
+        (*efs)->cfg.sync  = littlefs_bdl_sync;
+
+        // block device configuration
+        (*efs)->cfg.read_size = read_size;
+        (*efs)->cfg.prog_size = write_size;
+        (*efs)->cfg.block_size = erase_size;
+        (*efs)->cfg.block_count = g->disk_size / (*efs)->cfg.block_size;
+        if ((*efs)->cfg.block_count == 0) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid blockdev geometry: block_count=0 (disk_size=%" PRIu64 ", block_size=%u)",
+                     (uint64_t)g->disk_size, (unsigned)(*efs)->cfg.block_size);
+            return ESP_ERR_INVALID_ARG;
+        }
+        (*efs)->cfg.cache_size = esp_littlefs_bdl_pick_cache_size(erase_size, read_size, write_size);
+        if ((*efs)->cfg.cache_size == 0) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        (*efs)->cfg.lookahead_size = CONFIG_LITTLEFS_LOOKAHEAD_SIZE;
+        (*efs)->cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
+#if CONFIG_LITTLEFS_MULTIVERSION
+#if CONFIG_LITTLEFS_DISK_VERSION_MOST_RECENT
+        (*efs)->cfg.disk_version = 0;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_1
+        (*efs)->cfg.disk_version = 0x00020001;
+#elif CONFIG_LITTLEFS_DISK_VERSION_2_0
+        (*efs)->cfg.disk_version = 0x00020000;
+#else
+#error "CONFIG_LITTLEFS_MULTIVERSION enabled but no or unknown disk version selected!"
+#endif
+#endif
+    }
+
+    (*efs)->lock = xSemaphoreCreateRecursiveMutex();
+    if ((*efs)->lock == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "mutex lock could not be created");
+        return ESP_ERR_NO_MEM;
+    }
+
+    (*efs)->fs = esp_littlefs_calloc(1, sizeof(lfs_t));
+    if ((*efs)->fs == NULL) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "littlefs could not be malloced");
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+#endif /* ESP_LITTLEFS_HAS_BLOCKDEV */
+
 static esp_err_t esp_littlefs_init_efs(esp_littlefs_t** efs, const esp_partition_t* partition, bool read_only)
 {
     /* Allocate Context */
@@ -1079,6 +1427,14 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
             goto exit;
         }
 #endif
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+    } else if (conf->blockdev) {
+        if (esp_littlefs_by_blockdev(conf->blockdev, index) == ESP_OK) {
+            ESP_LOGE(ESP_LITTLEFS_TAG, "Blockdev already used");
+            err = ESP_ERR_INVALID_STATE;
+            goto exit;
+        }
+#endif
     } else {
         // Find first partition with "littlefs" subtype.
         partition = esp_partition_find_first(
@@ -1097,6 +1453,14 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
 	if (conf->sdcard) {
         err = esp_littlefs_init_sdcard(&efs, conf->sdcard, conf->read_only);
         if(err != ESP_OK) {
+            goto exit;
+        }
+    } else
+#endif
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+    if (conf->blockdev) {
+        err = esp_littlefs_init_blockdev(&efs, conf->blockdev, conf->read_only);
+        if (err != ESP_OK) {
             goto exit;
         }
     } else
@@ -1132,6 +1496,11 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
                 err = esp_littlefs_format_sdmmc(conf->sdcard);
             } else
 #endif
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+            if (conf->blockdev) {
+                err = esp_littlefs_format_blockdev(conf->blockdev);
+            } else
+#endif
             {
                 err = esp_littlefs_format_partition(efs->partition);
             }
@@ -1156,6 +1525,11 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
                 res = lfs_fs_grow(efs->fs, efs->sdcard->csd.capacity);
             } else
 #endif
+#if ESP_LITTLEFS_HAS_BLOCKDEV
+            if (efs->bdl_handle) {
+                res = lfs_fs_grow(efs->fs, efs->cfg.block_count);
+            } else
+#endif
             {
                 res = lfs_fs_grow(efs->fs, efs->partition->size / efs->cfg.block_size);
             }
@@ -1171,10 +1545,13 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf, int *ind
 
 exit:
     if(err != ESP_OK){
-        if( *index >= 0 ) {
+        /*
+         * Only tear down _efs[*index] when this call published the same context there.
+         * Otherwise, leave pre-existing mounts untouched (e.g. duplicate-register checks).
+         */
+        if (*index >= 0 && _efs[*index] == efs) {
             esp_littlefs_free(&_efs[*index]);
-        }
-        else{
+        } else {
             esp_littlefs_free(&efs);
         }
     }
