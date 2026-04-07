@@ -783,6 +783,12 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         TEST_ASSERT_EQUAL(0, fclose(f));
     }
 
+    /* When the filesystem is nearly full, littlefs may internally recover
+     * from NOSPC (e.g. metadata compaction succeeds without a split) so
+     * neither fwrite nor fclose reports an error.  Detect this steady-state
+     * by stopping once used_bytes stops growing. */
+    size_t total = 0, used = 0, prev_used = 0;
+    int stall_count = 0;
     bool disk_full = false;
     int i = 0;
     while(!disk_full){
@@ -798,10 +804,19 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
             disk_full = true;
         }
 
-        size_t total = 0, used = 0;
+        total = 0; used = 0;
         TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
         TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
         //printf("used: %d total: %d\n", used, total);
+
+        if (used == prev_used) {
+            if (++stall_count >= 10) {
+                break;
+            }
+        } else {
+            stall_count = 0;
+        }
+        prev_used = used;
         i++;
     }
     test_teardown();
