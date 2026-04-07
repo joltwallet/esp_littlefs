@@ -762,7 +762,15 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
 
 TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
 {
-    // https://github.com/joltwallet/esp_littlefs/issues/66
+    /* https://github.com/joltwallet/esp_littlefs/issues/66
+     *
+     * lfs_fs_size can report more blocks in use than the filesystem has,
+     * causing esp_littlefs_info to return used_bytes > total_bytes.
+     * When the caller computes free = total - used, this underflows to ~4GB.
+     *
+     * Mitigation: get_total_and_used_bytes clamps used to MIN(total, ...).
+     * This test fills the partition while asserting total >= used every step.
+     */
     test_setup();
     const char foo[] = "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo";
 
@@ -783,25 +791,39 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         TEST_ASSERT_EQUAL(0, fclose(f));
     }
 
-    bool disk_full = false;
+    /* When the filesystem is nearly full, littlefs may internally recover
+     * from NOSPC (e.g. metadata compaction succeeds without a split) so
+     * neither fwrite nor fclose reports an error.  Detect this steady-state
+     * by stopping once used_bytes stops growing. */
+    size_t total = 0, used = 0, prev_used = 0;
+    int stall_count = 0;
     int i = 0;
-    while(!disk_full){
+    while(true){
         char *filename = names[i % 7];
         FILE* f = fopen(filename, "a+b");
         TEST_ASSERT_NOT_NULL(f);
         size_t n_bytes = 200 + i % 17;
         int amount_written = fwrite(foo, n_bytes, 1, f);
         if(amount_written != 1) {
-            disk_full = true;
+            break;
         }
         if(0 != fclose(f)){
-            disk_full = true;
+            break;
         }
 
-        size_t total = 0, used = 0;
+        total = 0; used = 0;
         TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
         TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
         //printf("used: %d total: %d\n", used, total);
+
+        if (used == prev_used && (total - used) <= 2 * 4096) {
+            if (++stall_count >= 10) {
+                break;
+            }
+        } else {
+            stall_count = 0;
+        }
+        prev_used = used;
         i++;
     }
     test_teardown();
