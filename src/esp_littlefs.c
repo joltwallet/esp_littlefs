@@ -180,7 +180,7 @@ static inline void * esp_littlefs_calloc(size_t __nmemb, size_t __size) {
 #if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
     return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
-    return heap_caps_calloc(__nmemb, __size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    return heap_caps_calloc_prefer(__nmemb, __size, 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM, MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
 #else /* CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE, CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT or not defined */
     return calloc(__nmemb, __size);
 #endif
