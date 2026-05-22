@@ -246,6 +246,15 @@ menu "LittleFS"
             depends on SPIRAM_USE_MALLOC || SPIRAM_USE_CAPS_ALLOC
             help
                 Uses ESP-IDF heap_caps_malloc to allocate from SPIRAM heap.
+                Allocation fails if SPIRAM is exhausted; internal heap is not used.
+
+        config LITTLEFS_MALLOC_STRATEGY_SPIRAM_PREFER
+            bool "SPIRAM heap, fall back to default heap"
+            help
+                Uses ESP-IDF heap_caps_malloc_prefer to allocate from SPIRAM heap,
+                falling back to the default heap (typically internal RAM) if the
+                SPIRAM allocation fails. Choose this when you want SPIRAM to be
+                used opportunistically without hard-failing under SPIRAM pressure.
 
     endchoice
 
