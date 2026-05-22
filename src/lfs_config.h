@@ -213,18 +213,23 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size);
 // Allocate memory, only used if buffers are not provided to littlefs
 // For the lookahead buffer, memory must be 32-bit aligned
 static inline void *lfs_malloc(size_t size) {
+    void *p;
 #if defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_DEFAULT)
-    return malloc(size); // Equivalent to heap_caps_malloc_default(size);
+    p = malloc(size); // Equivalent to heap_caps_malloc_default(size);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL)
-    return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    p = heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM)
-    return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    p = heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
 #elif defined(CONFIG_LITTLEFS_MALLOC_STRATEGY_SPIRAM_PREFER)
-    return heap_caps_malloc_prefer(size, 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM, MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
+    p = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM, MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
 #else // CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE or not defined
     (void)size;
     return NULL;
 #endif
+    if (p == NULL) {
+        LFS_ERROR("lfs_malloc(%zu) failed", size);
+    }
+    return p;
 }
 
 // Deallocate memory, only used if buffers are not provided to littlefs
