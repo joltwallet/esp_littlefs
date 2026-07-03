@@ -1160,12 +1160,6 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    /* LittleFS assumes erased storage reads as 0xFF (all bits 1). */
-    if (!f->default_val_after_erase) {
-        ESP_LOGE(ESP_LITTLEFS_TAG, "BDL requires default_val_after_erase=1 (0xFF erased state)");
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-
     /*
      * Use BDL flags only to determine effective LittleFS block sizing mode:
      * - classic: any erase-dependent/program-constrained medium
@@ -1173,6 +1167,18 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
      */
     const bool classic = f->erase_before_write || f->and_type_write;
     const bool logical = !classic;
+
+    /*
+     * Classic mode packs several commits into a single (large) erase block and relies on
+     * erased storage reading back as 0xFF (all bits 1) to find the end of the log and to
+     * append without re-erasing. In logical mode block_size == prog_size, so every block is
+     * erased and fully re-programmed before it is read again and the erased byte value is
+     * irrelevant (this matches the native SD/eMMC path, which may erase to 0x00).
+     */
+    if (classic && !f->default_val_after_erase) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Classic-mode BDL requires default_val_after_erase=1 (0xFF erased state)");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     if (!read_only && blockdev->device_flags.read_only) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "Refusing to mount read-only block dev for write");
