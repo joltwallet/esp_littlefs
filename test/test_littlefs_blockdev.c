@@ -486,9 +486,13 @@ TEST_CASE("bdl basic geometry rejection matrix", "[littlefs_bdl_geom]")
     p.erase_before_write = false;
     p.and_type_write = false;
     p.read_size = 16;
-    p.write_size = 48; /* lcm = 48 */
+    p.write_size = 48; /* lcm = 48, raised to 144 for the LittleFS minimum */
     p.disk_size = (48 * 10) - 1;
     p.strict_erase_alignment = false;
+    assert_mock_bdl_register_result(&p, false, ESP_ERR_INVALID_ARG);
+
+    p = mock_bdl_default_params();
+    p.erase_size = 64; /* classic block_size below the LittleFS 128-byte minimum */
     assert_mock_bdl_register_result(&p, false, ESP_ERR_INVALID_ARG);
 }
 

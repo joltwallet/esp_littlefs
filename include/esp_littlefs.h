@@ -59,7 +59,8 @@ typedef struct {
      * - `encrypted` — mount fails (not supported).
      * - `erase_before_write` and `and_type_write` are used only to select block sizing mode:
      *   - classic mode (either flag set): `lfs` `block_size` uses geometry erase size.
-     *   - logical mode (both flags clear): `lfs` `block_size` uses lcm(read, prog).
+     *   - logical mode (both flags clear): `lfs` `block_size` uses lcm(read, prog),
+     *     raised to a multiple of it that meets the LittleFS 128-byte minimum.
      * - `default_val_after_erase` — must be 1 in classic mode (LittleFS expects 0xFF after
      *   erase); ignored in logical mode (overwrite-capable media may erase to any value).
      *

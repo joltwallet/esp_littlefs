@@ -67,6 +67,8 @@
 #endif
 #endif
 
+#define LFS_MIN_BLOCK_SIZE 128 /* Enforced by LFS_ASSERT in lfs_init */
+
 /**
  * @brief littlefs DIR structure
  */
@@ -1239,10 +1241,14 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
     } else {
         /* Logical block size: lcm(read, prog); ignore huge physical erase_size for LFS block boundaries. */
         erase_size = lcm_size(read_size, write_size);
+        if (erase_size > 0 && erase_size < LFS_MIN_BLOCK_SIZE) {
+            /* Overwrite-capable media accept any multiple of lcm(read, prog) as block size. */
+            erase_size *= (LFS_MIN_BLOCK_SIZE + erase_size - 1) / erase_size;
+        }
         if (erase_size == 0 || (g->disk_size % erase_size) != 0) {
             ESP_LOGE(ESP_LITTLEFS_TAG,
-                     "Logical BDL: disk_size (%" PRIu64 ") must be a non-zero multiple of lcm(read_size=%u, prog_size=%u) (%u)",
-                     (uint64_t)g->disk_size, (unsigned)read_size, (unsigned)write_size, (unsigned)erase_size);
+                     "Logical BDL: disk_size (%" PRIu64 ") must be a non-zero multiple of the logical block size (%u) derived from lcm(read_size=%u, prog_size=%u)",
+                     (uint64_t)g->disk_size, (unsigned)erase_size, (unsigned)read_size, (unsigned)write_size);
             return ESP_ERR_INVALID_ARG;
         }
     }
@@ -1256,6 +1262,12 @@ static esp_err_t esp_littlefs_init_blockdev(esp_littlefs_t** efs, esp_blockdev_h
     if (erase_size % read_size != 0 || erase_size % write_size != 0) {
         ESP_LOGE(ESP_LITTLEFS_TAG, "block_size (%u) must be a multiple of read_size (%u) and prog_size (%u)",
                  (unsigned)erase_size, (unsigned)read_size, (unsigned)write_size);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (erase_size < LFS_MIN_BLOCK_SIZE) {
+        ESP_LOGE(ESP_LITTLEFS_TAG, "block_size (%u) must be at least %u",
+                 (unsigned)erase_size, (unsigned)LFS_MIN_BLOCK_SIZE);
         return ESP_ERR_INVALID_ARG;
     }
 
