@@ -447,6 +447,14 @@ TEST_CASE("bdl flag compatibility validation", "[littlefs_bdl_geom]")
     p.default_val_after_erase = false;
     assert_mock_bdl_register_result(&p, false, ESP_ERR_NOT_SUPPORTED);
 
+    /* logical mode does not require a 0xFF erased state (e.g. SD cards erasing to 0x00) */
+    p = mock_bdl_default_params();
+    p.erase_before_write = false;
+    p.and_type_write = false;
+    p.default_val_after_erase = false;
+    p.strict_erase_alignment = false;
+    assert_mock_bdl_register_result(&p, false, ESP_OK);
+
     p = mock_bdl_default_params();
     p.and_type_write = false;
     assert_mock_bdl_register_result(&p, false, ESP_OK);
