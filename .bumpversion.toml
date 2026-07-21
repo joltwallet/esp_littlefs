@@ -1,0 +1,45 @@
+[tool.bumpversion]
+current_version = "1.22.2"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "littlefs=={current_version}"
+replace = "littlefs=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "idf_component.yml"
+search = "\"{current_version}\""
+replace = "\"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "library.json"
+search = "\"{current_version}\""
+replace = "\"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "include/esp_littlefs.h"
+search = "ESP_LITTLEFS_VERSION_NUMBER \"{current_version}\""
+replace = "ESP_LITTLEFS_VERSION_NUMBER \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "include/esp_littlefs.h"
+parse = "(?P<major>\\d+)"
+serialize = ["{major}"]
+search = "ESP_LITTLEFS_VERSION_MAJOR {current_version}"
+replace = "ESP_LITTLEFS_VERSION_MAJOR {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "include/esp_littlefs.h"
+parse = "(?P<minor>\\d+)"
+serialize = ["{minor}"]
+search = "ESP_LITTLEFS_VERSION_MINOR {current_version}"
+replace = "ESP_LITTLEFS_VERSION_MINOR {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "include/esp_littlefs.h"
+parse = "(?P<patch>\\d+)"
+serialize = ["{patch}"]
+search = "ESP_LITTLEFS_VERSION_PATCH {current_version}"
+replace = "ESP_LITTLEFS_VERSION_PATCH {new_version}"
