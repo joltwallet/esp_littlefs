@@ -1,5 +1,7 @@
 #include "test_littlefs_common.h"
 
+/* Opt in locally; the v5.x unit-test-app doesn't load this repo's sdkconfig.defaults. */
+#define ESP_LITTLEFS_RAW_API
 #include "lfs.h"
 
 #ifndef LFS_CONFIG
