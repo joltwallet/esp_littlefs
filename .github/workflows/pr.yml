@@ -58,7 +58,7 @@ jobs:
         uses: espressif/esp-idf-ci-action@main
         with:
           esp_idf_version: ${{ matrix.idf_ver }}
-          command: '/bin/bash -c " ln -s /app /opt/esp/idf/tools/unit-test-app/components/littlefs; cd /opt/esp/idf/tools/unit-test-app; idf.py -T littlefs build"'
+          command: '/bin/bash -c "ln -s /app/${{ github.repository }} /opt/esp/idf/tools/unit-test-app/components/littlefs && cd /opt/esp/idf/tools/unit-test-app && idf.py -T littlefs build"'
 
       # ESP-IDF v6.0+: Use new test_apps structure
       - name: esp-idf build tests (v6.0+)
