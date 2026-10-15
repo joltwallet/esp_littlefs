@@ -27,28 +27,26 @@ function(littlefs_create_partition_image partition base_dir)
 		set(image_file ${CMAKE_BINARY_DIR}/${partition}.bin)
 
 		if(CMAKE_HOST_WIN32)
-			set(littlefs_py "${littlefs_py_venv}/Scripts/littlefs-python.exe")
-			add_custom_command(
-					OUTPUT ${littlefs_py_venv}
-					COMMAND ${PYTHON} -m venv ${littlefs_py_venv} && ${littlefs_py_venv}/Scripts/pip.exe install -r ${littlefs_py_requirements}
-					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-					DEPENDS ${littlefs_py_requirements}
-			)
+			set(littlefs_py_python "${littlefs_py_venv}/Scripts/python.exe")
 		else()
-			set(littlefs_py "${littlefs_py_venv}/bin/littlefs-python")
-			add_custom_command(
-					OUTPUT ${littlefs_py_venv}
-					COMMAND ${PYTHON} -m venv ${littlefs_py_venv} && ${littlefs_py_venv}/bin/pip install -r ${littlefs_py_requirements}
-					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-					DEPENDS ${littlefs_py_requirements}
-			)
+			set(littlefs_py_python "${littlefs_py_venv}/bin/python")
 		endif()
+
+		# Run pip and littlefs-python as modules of the venv's interpreter instead of through their
+		# generated console-script launchers (e.g. littlefs-python.exe). Windows Smart App Control
+		# and other WDAC policies block those unsigned launchers.
+		add_custom_command(
+				OUTPUT ${littlefs_py_venv}
+				COMMAND ${PYTHON} -m venv ${littlefs_py_venv} && ${littlefs_py_python} -m pip install -r ${littlefs_py_requirements}
+				WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+				DEPENDS ${littlefs_py_requirements}
+		)
 
 		# Execute LittleFS image generation; this always executes as there is no way to specify for CMake to watch for
 		# contents of the base dir changing.
 
 		add_custom_target(littlefs_${partition}_bin ALL
-			COMMAND ${littlefs_py} create ${base_dir_full_path} ${image_file} -v --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096
+			COMMAND ${littlefs_py_python} -m littlefs create ${base_dir_full_path} ${image_file} -v --fs-size=${size} --name-max=${CONFIG_LITTLEFS_OBJ_NAME_LEN} --block-size=4096
 			DEPENDS ${arg_DEPENDS} ${littlefs_py_venv}
 			)
 
