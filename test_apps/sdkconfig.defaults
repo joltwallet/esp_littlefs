@@ -17,6 +17,7 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # LittleFS settings for testing
 CONFIG_LITTLEFS_USE_MTIME=y
+CONFIG_LITTLEFS_EXPOSE_RAW_API=y
 
 # SPIFFS settings (for benchmark comparisons)
 CONFIG_SPIFFS_USE_MTIME=y

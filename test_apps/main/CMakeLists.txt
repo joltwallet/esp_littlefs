@@ -7,6 +7,7 @@ set(MAIN_TEST_SRCS
     "${TEST_DIR}/test_dir.c"
     "${TEST_DIR}/test_benchmark.c"
     "${TEST_DIR}/test_littlefs_static_partition.c"
+    "${TEST_DIR}/test_littlefs_raw_api.c"
 )
 
 set(MAIN_TEST_REQUIRES

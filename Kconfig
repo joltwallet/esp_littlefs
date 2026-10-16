@@ -7,6 +7,23 @@ menu "LittleFS"
             Toggle SD card support
             This requires IDF v5+ as older ESP-IDF do not support SD card erase.
 
+    config LITTLEFS_EXPOSE_RAW_API
+        bool "Expose the raw upstream LittleFS API (lfs.h) to consumers"
+        default n
+        help
+            Publishes the vendored upstream LittleFS headers (lfs.h, lfs_util.h)
+            so that applications can drive the raw lfs_* API with the same
+            configuration this component is built with.
+
+            The raw API bypasses the VFS layer and its internal locking. Do not
+            mount the same partition through the VFS layer and the raw API at
+            the same time. Driving a partition with the raw API while the VFS
+            layer serves a different partition is safe.
+
+            Disabled by default so that including "lfs.h" is a deliberate
+            opt-in. Alternatively, define ESP_LITTLEFS_RAW_API in the
+            consuming code's build flags.
+
     config LITTLEFS_MAX_PARTITIONS
         int "Maximum Number of Partitions"
         default 3

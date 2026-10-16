@@ -40,15 +40,3 @@ set_source_files_properties(
 if(CONFIG_LITTLEFS_FCNTL_GET_PATH)
     target_compile_definitions(${COMPONENT_LIB} PUBLIC -DF_GETPATH=${CONFIG_LITTLEFS_FCNTL_F_GETPATH_VALUE})
 endif()
-
-if(CONFIG_LITTLEFS_MULTIVERSION)
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DLFS_MULTIVERSION)
-endif()
-
-if(CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE)
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DLFS_NO_MALLOC)
-endif()
-
-if(NOT CONFIG_LITTLEFS_ASSERTS)
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DLFS_NO_ASSERT)
-endif()

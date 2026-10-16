@@ -35,6 +35,21 @@
 #include <stdio.h>
 #endif
 
+/*
+ * Map this component's Kconfig onto littlefs' own configuration macros.
+ */
+#ifdef CONFIG_LITTLEFS_MULTIVERSION
+#define LFS_MULTIVERSION
+#endif
+
+#ifdef CONFIG_LITTLEFS_MALLOC_STRATEGY_DISABLE
+#define LFS_NO_MALLOC
+#endif
+
+#ifndef CONFIG_LITTLEFS_ASSERTS
+#define LFS_NO_ASSERT
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {

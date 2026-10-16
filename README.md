@@ -2,9 +2,7 @@ LittleFS for ESP-IDF.
 
 # What is LittleFS?
 
-[LittleFS](https://github.com/ARMmbed/littlefs) is a small fail-safe filesystem 
-for microcontrollers. We ported LittleFS to esp-idf (specifically, the ESP32) 
-because SPIFFS was too slow, and FAT was too fragile.
+[LittleFS](https://github.com/ARMmbed/littlefs) is a small fail-safe filesystem for microcontrollers. We ported LittleFS to esp-idf (specifically, the ESP32) because SPIFFS was too slow, and FAT was too fragile.
 
 # How to Use
 
@@ -28,9 +26,11 @@ git submodule update --init --recursive
 The library can be configured via `idf.py menuconfig` under `Component config->LittleFS`.
 
 #### Example
+
 User @wreyford has kindly provided a [demo repo](https://github.com/wreyford/demo_esp_littlefs) showing the use of `esp_littlefs`. A modified copy exists in the `example/` directory.
 
 ## PlatformIO
+
 Add to the following line to your project's `platformio.ini` file:
 
 ```
@@ -95,8 +95,7 @@ An entry `Component config->LittleFS` should be available for configuration. If 
 
 # Documentation
 
-See the official [ESP-IDF SPIFFS documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/spiffs.html), basically all the functionality is the 
-same; just replace `spiffs` with `littlefs` in all function calls.
+See the official [ESP-IDF SPIFFS documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/spiffs.html), basically all the functionality is the same; just replace `spiffs` with `littlefs` in all function calls.
 
 Also see the comments in `include/esp_littlefs.h`
 
@@ -105,6 +104,22 @@ Slight differences between this configuration and SPIFFS's configuration is in t
 1. `max_files` field doesn't exist since we removed the file limit, thanks to @X-Ryl669
 2. `grow_on_mount` will expand an existing filesystem to fill the partition. Defaults to `false`.
     * LittleFS filesystems can only grow, they cannot shrink.
+
+### Using the raw LittleFS API
+
+The POSIX/VFS layer described above is the intended way to use this component, but the raw LittleFS API (`lfs_t`, `struct lfs_config`, `lfs_*`) can be published as well. It is gated behind an explicit opt-in, so that including the headers is always a deliberate choice. Either enable `Component config -> LittleFS -> Expose the raw upstream LittleFS API` in menuconfig:
+
+```
+CONFIG_LITTLEFS_EXPOSE_RAW_API=y
+```
+
+or add `-DESP_LITTLEFS_RAW_API` to the consuming component's compile flags. Without the opt-in, including the headers stops the build with an error pointing here.
+
+```c
+#include "lfs.h"
+```
+
+The raw API needs its own block-device callbacks (`read` / `prog` / `erase` / `sync`). Do not mount the same partition through VFS and the raw API at the same time: the VFS layer serializes access with an internal lock that the raw API does not share. Driving a *different* partition with the raw API while VFS serves another one is safe.
 
 ### Filesystem Image Creation
 
@@ -123,17 +138,17 @@ For example, if your partition table looks like:
 nvs,      data, nvs,      0x9000,  0x6000,
 phy_init, data, phy,      0xf000,  0x1000,
 factory,  app,  factory,  0x10000, 1M,
-graphics,  data, spiffs,         ,  0xF0000, 
+graphics,  data, spiffs,         ,  0xF0000,
 ```
 
-change it to: 
+change it to:
 
 ```
 # Name,   Type, SubType,  Offset,  Size, Flags
 nvs,      data, nvs,      0x9000,  0x6000,
 phy_init, data, phy,      0xf000,  0x1000,
 factory,  app,  factory,  0x10000, 1M,
-graphics,  data, littlefs,         ,  0xF0000, 
+graphics,  data, littlefs,         ,  0xF0000,
 ```
 
 
@@ -177,7 +192,7 @@ LittleFS (cache=4096):          6,026,592 us
 ```
 
 In the above test, SPIFFS drastically slows down as the filesystem fills up. Below
-is the specific breakdown of file write times for SPIFFS. Not sure what happens 
+is the specific breakdown of file write times for SPIFFS. Not sure what happens
 on the last file write.
 
 
