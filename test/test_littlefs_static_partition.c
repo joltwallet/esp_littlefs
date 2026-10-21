@@ -52,9 +52,9 @@ TEST_CASE("can read partition", "[littlefs_static]")
 {
   const esp_partition_t partition = get_test_data_static_partition();
   test_setup_static(&partition);
-  size_t total = 0, used = 0;
+  uint64_t total = 0, used = 0;
   TEST_ESP_OK(esp_littlefs_partition_info(&partition, &total, &used));
-  printf("total: %d, used: %d\n", total, used);
+  printf("total: %" PRIu64 ", used: %" PRIu64 "\n", total, used);
   TEST_ASSERT_EQUAL(20480, used);  // The test FS has 5 used blocks of 4K
   test_teardown_static(&partition);
 }
@@ -131,7 +131,7 @@ TEST_CASE("grow filesystem", "[littlefs]")
       .partition = (const esp_partition_t *) &partition,
     };
 
-    size_t shrink_bytes;
+    uint64_t shrink_bytes;
 
     /* Format a smaller partition */
     {
@@ -152,7 +152,7 @@ TEST_CASE("grow filesystem", "[littlefs]")
 
     /* Mount, ensure that it DOES grow */
     {
-        size_t grow_bytes;
+        uint64_t grow_bytes;
         conf.grow_on_mount = true;
         TEST_ESP_OK(esp_vfs_littlefs_register(&conf));
         TEST_ESP_OK(esp_littlefs_partition_info(&partition, &grow_bytes, NULL));

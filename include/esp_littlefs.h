@@ -5,6 +5,7 @@
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_partition.h"
 
 /** LittleFS over ESP-IDF Block Device Layer (`esp_blockdev`) is only built on ESP-IDF 6+ (non-ESP8266). */
@@ -244,7 +245,7 @@ esp_err_t esp_littlefs_format_blockdev(esp_blockdev_handle_t blockdev);
  *          - ESP_OK                  if success
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
-esp_err_t esp_littlefs_info(const char* partition_label, size_t* total_bytes, size_t* used_bytes);
+esp_err_t esp_littlefs_info(const char* partition_label, uint64_t* total_bytes, uint64_t* used_bytes);
 
 /**
  * Get information for littlefs
@@ -257,7 +258,7 @@ esp_err_t esp_littlefs_info(const char* partition_label, size_t* total_bytes, si
  *          - ESP_OK                  if success
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
-esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *total_bytes, size_t *used_bytes);
+esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, uint64_t *total_bytes, uint64_t *used_bytes);
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
 /**
@@ -271,7 +272,7 @@ esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *
  *          - ESP_OK                  if success
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
-esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, size_t *used_bytes);
+esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, uint64_t *total_bytes, uint64_t *used_bytes);
 #endif
 
 #if ESP_LITTLEFS_HAS_BLOCKDEV
@@ -286,7 +287,7 @@ esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, siz
  *          - ESP_OK                  if success
  *          - ESP_ERR_INVALID_STATE   if not mounted
  */
-esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, size_t *total_bytes, size_t *used_bytes);
+esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, uint64_t *total_bytes, uint64_t *used_bytes);
 #endif
 
 #ifdef __cplusplus

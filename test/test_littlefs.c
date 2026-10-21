@@ -16,9 +16,9 @@ TEST_CASE("can initialize LittleFS in erased partition", "[littlefs]")
     TEST_ASSERT_NOT_NULL(part);
     TEST_ESP_OK(esp_partition_erase_range(part, 0, part->size));
     test_setup();
-    size_t total = 0, used = 0;
+    uint64_t total = 0, used = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
-    printf("total: %d, used: %d\n", total, used);
+    printf("total: %" PRIu64 ", used: %" PRIu64 "\n", total, used);
     TEST_ASSERT_EQUAL(8192, used); // 2 blocks are used on a fresh filesystem
     test_teardown();
 }
@@ -292,7 +292,7 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
     unlink(filename);  /* Delete the file incase it exists */
     
     /* Get starting system size */
-    size_t total_og = 0, used_og = 0;
+    uint64_t total_og = 0, used_og = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_og, &used_og));
 
     /* Write 100,000 bytes */
@@ -306,10 +306,11 @@ TEST_CASE("esp_littlefs_info", "[littlefs]")
     TEST_ASSERT_EQUAL(0, fclose(f));
 
     /* Re-check system size */
-    size_t total_new = 0, used_new = 0;
+    uint64_t total_new = 0, used_new = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total_new, &used_new));
 
-    printf("old: %d; new: %d; diff: %d\n", used_og, used_new, used_new-used_og);
+    printf("old: %" PRIu64 "; new: %" PRIu64 "; diff: %" PRIu64 "\n",
+           used_og, used_new, used_new - used_og);
 
     /* total amount of storage shouldn't change */
     TEST_ASSERT_EQUAL_INT(total_og, total_new);
@@ -739,11 +740,11 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
 
     test_setup();
 
-    size_t total = 0, used = 0;
+    uint64_t total = 0, used = 0;
     TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
 
     // 2 block overhead
-    int kb_to_write = (total - used - (2*4096)) / 1024;
+    uint64_t kb_to_write = (total - used - (2*4096)) / 1024;
 
     // Create and overwrite a file >50% of spaceA (48/64K)
     uint8_t buf[1024];
@@ -752,7 +753,7 @@ TEST_CASE("Rewriting file frees space immediately (#7426)", "[littlefs]")
         FILE *f = fopen(littlefs_base_path "/file1.bin", "w");
         TEST_ASSERT_NOT_NULL(f);
 
-        for (size_t i = 0; i < kb_to_write; i++) {
+        for (uint64_t i = 0; i < kb_to_write; i++) {
             TEST_ASSERT_EQUAL_INT(1024, fwrite(buf, 1, 1024, f));
         }
         TEST_ASSERT_EQUAL(0, fclose(f));
@@ -795,7 +796,7 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
      * from NOSPC (e.g. metadata compaction succeeds without a split) so
      * neither fwrite nor fclose reports an error.  Detect this steady-state
      * by stopping once used_bytes stops growing. */
-    size_t total = 0, used = 0, prev_used = 0;
+    uint64_t total = 0, used = 0, prev_used = 0;
     int stall_count = 0;
     int i = 0;
     while(true){
@@ -814,7 +815,6 @@ TEST_CASE("esp_littlefs_info returns used_bytes > total_bytes", "[littlefs]")
         total = 0; used = 0;
         TEST_ESP_OK(esp_littlefs_info(littlefs_test_partition_label, &total, &used));
         TEST_ASSERT_GREATER_OR_EQUAL_INT(used, total);
-        //printf("used: %d total: %d\n", used, total);
 
         if (used == prev_used && (total - used) <= 2 * 4096) {
             if (++stall_count >= 10) {
