@@ -304,13 +304,17 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
 
 void get_total_and_used_bytes(esp_littlefs_t *efs, size_t *total_bytes, size_t *used_bytes) {
     sem_take(efs);
-    size_t total_bytes_local = efs->cfg.block_size * efs->fs->block_count;
-    if(total_bytes) *total_bytes = total_bytes_local;
+    uint64_t total_bytes_local = (uint64_t)efs->cfg.block_size * efs->fs->block_count;
+    if(total_bytes) *total_bytes = total_bytes_local > SIZE_MAX ? SIZE_MAX : (size_t)total_bytes_local;
 
     /* lfs_fs_size may return a size larger than the actual filesystem size.
      * https://github.com/littlefs-project/littlefs/blob/9c7e232086f865cff0bb96fe753deb66431d91fd/lfs.h#L658
      */
-    if(used_bytes) *used_bytes = MIN(total_bytes_local, efs->cfg.block_size * lfs_fs_size(efs->fs));
+    if(used_bytes) {
+        uint64_t used_bytes_local = (uint64_t)efs->cfg.block_size * lfs_fs_size(efs->fs);
+        used_bytes_local = MIN(total_bytes_local, used_bytes_local);
+        *used_bytes = used_bytes_local > SIZE_MAX ? SIZE_MAX : (size_t)used_bytes_local;
+    }
     sem_give(efs);
 }
 
