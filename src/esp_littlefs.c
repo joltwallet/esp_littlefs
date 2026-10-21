@@ -159,7 +159,7 @@ static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg);
 static int sem_take(esp_littlefs_t *efs);
 static int sem_give(esp_littlefs_t *efs);
 static esp_err_t format_from_efs(esp_littlefs_t *efs);
-static void get_total_and_used_bytes(esp_littlefs_t *efs, uint64_t *total_bytes, uint64_t *used_bytes);
+static void get_total_and_used_bytes(esp_littlefs_t *efs, size_t *total_bytes, size_t *used_bytes);
 
 static SemaphoreHandle_t _efs_lock = NULL;
 static esp_littlefs_t * _efs[CONFIG_LITTLEFS_MAX_PARTITIONS] = { 0 };
@@ -302,17 +302,18 @@ esp_err_t format_from_efs(esp_littlefs_t *efs)
     return ESP_OK;
 }
 
-void get_total_and_used_bytes(esp_littlefs_t *efs, uint64_t *total_bytes, uint64_t *used_bytes) {
+void get_total_and_used_bytes(esp_littlefs_t *efs, size_t *total_bytes, size_t *used_bytes) {
     sem_take(efs);
     uint64_t total_bytes_local = (uint64_t)efs->cfg.block_size * efs->fs->block_count;
-    if(total_bytes) *total_bytes = total_bytes_local;
+    if(total_bytes) *total_bytes = total_bytes_local > SIZE_MAX ? SIZE_MAX : (size_t)total_bytes_local;
 
     /* lfs_fs_size may return a size larger than the actual filesystem size.
      * https://github.com/littlefs-project/littlefs/blob/9c7e232086f865cff0bb96fe753deb66431d91fd/lfs.h#L658
      */
     if(used_bytes) {
         uint64_t used_bytes_local = (uint64_t)efs->cfg.block_size * lfs_fs_size(efs->fs);
-        *used_bytes = MIN(total_bytes_local, used_bytes_local);
+        used_bytes_local = MIN(total_bytes_local, used_bytes_local);
+        *used_bytes = used_bytes_local > SIZE_MAX ? SIZE_MAX : (size_t)used_bytes_local;
     }
     sem_give(efs);
 }
@@ -360,7 +361,7 @@ bool esp_littlefs_blockdev_mounted(esp_blockdev_handle_t blockdev)
 }
 #endif
 
-esp_err_t esp_littlefs_info(const char* partition_label, uint64_t *total_bytes, uint64_t *used_bytes){
+esp_err_t esp_littlefs_info(const char* partition_label, size_t *total_bytes, size_t *used_bytes){
     int index;
     esp_err_t err;
 
@@ -371,7 +372,7 @@ esp_err_t esp_littlefs_info(const char* partition_label, uint64_t *total_bytes, 
     return ESP_OK;
 }
 
-esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, uint64_t *total_bytes, uint64_t *used_bytes){
+esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, size_t *total_bytes, size_t *used_bytes){
     int index;
     esp_err_t err;
 
@@ -383,7 +384,7 @@ esp_err_t esp_littlefs_partition_info(const esp_partition_t* partition, uint64_t
 }
 
 #ifdef CONFIG_LITTLEFS_SDMMC_SUPPORT
-esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, uint64_t *total_bytes, uint64_t *used_bytes)
+esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, size_t *total_bytes, size_t *used_bytes)
 {
     int index;
     esp_err_t err;
@@ -397,7 +398,7 @@ esp_err_t esp_littlefs_sdmmc_info(sdmmc_card_t *sdcard, uint64_t *total_bytes, u
 #endif
 
 #if ESP_LITTLEFS_HAS_BLOCKDEV
-esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, uint64_t *total_bytes, uint64_t *used_bytes)
+esp_err_t esp_littlefs_blockdev_info(esp_blockdev_handle_t blockdev, size_t *total_bytes, size_t *used_bytes)
 {
     int index;
     esp_err_t err;

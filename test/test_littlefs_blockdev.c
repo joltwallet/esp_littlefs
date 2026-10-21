@@ -350,7 +350,7 @@ TEST_CASE("bdl can initialize LittleFS in erased partition", "[littlefs_bdl]")
     TEST_ESP_OK(esp_littlefs_format_partition(part));
     test_setup_bdl_rw();
 
-    uint64_t total = 0, used = 0;
+    size_t total = 0, used = 0;
     TEST_ESP_OK(esp_littlefs_blockdev_info(s_bdl_handle, &total, &used));
     TEST_ASSERT_GREATER_THAN(0, total);
 

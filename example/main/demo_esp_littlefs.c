@@ -12,7 +12,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
-#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -82,7 +81,7 @@ void app_main(void)
                 return;
         }
 
-        uint64_t total = 0, used = 0;
+        size_t total = 0, used = 0;
         ret = esp_littlefs_info(conf.partition_label, &total, &used);
         if (ret != ESP_OK)
         {
@@ -90,7 +89,7 @@ void app_main(void)
         }
         else
         {
-                ESP_LOGI(TAG, "Partition size: total: %" PRIu64 ", used: %" PRIu64, total, used);
+                ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
         }
 
         // Use POSIX and C standard library functions to work with files.
