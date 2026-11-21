@@ -29,7 +29,7 @@ jobs:
             idf_target: esp32c6
           - idf_ver: "latest"
             idf_target: esp32p4
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-26.04 ships cppcheck 2.19, which rejects unresolved IDF/littlefs macros
     steps:
       - uses: actions/checkout@v4
         with:
