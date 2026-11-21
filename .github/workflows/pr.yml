@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+  pull_request:  # any base branch, so stacked PRs get CI too
   schedule:
     - cron: "0 1 * * 6" # Every Saturday at 1AM
 
