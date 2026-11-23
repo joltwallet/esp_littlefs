@@ -1801,6 +1801,20 @@ static uint32_t compute_hash(const char * path) {
     return hash;
 }
 
+/**
+ * @brief Looks up the open file record for a littlefs-local file descriptor.
+ * @param[in] efs file system context
+ * @param[in] fd file descriptor
+ * @returns the file record, or NULL if fd is out of range or not open.
+ * @warning This must be called with lock taken
+ */
+static vfs_littlefs_file_t *esp_littlefs_get_file(esp_littlefs_t *efs, int fd) {
+    if((uint32_t)fd >= efs->cache_size) {
+        return NULL;
+    }
+    return efs->cache[fd];
+}
+
 #ifdef CONFIG_VFS_SUPPORT_DIR
 /**
  * @brief finds an open file descriptor by file name.
@@ -1974,13 +1988,13 @@ static ssize_t vfs_littlefs_write(void* ctx, int fd, const void * data, size_t s
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_file_write(efs->fs, &file->file, data, size);
 #ifdef CONFIG_LITTLEFS_FLUSH_FILE_EVERY_WRITE
     if(res > 0) {
@@ -2010,13 +2024,13 @@ static ssize_t vfs_littlefs_read(void* ctx, int fd, void * dst, size_t size) {
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_file_read(efs->fs, &file->file, dst, size);
     sem_give(efs);
 
@@ -2042,14 +2056,13 @@ static ssize_t vfs_littlefs_pwrite(void *ctx, int fd, const void *src, size_t si
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if ((uint32_t)fd > efs->cache_size)
-    {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
 
     off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
     if (old_offset < (off_t)0)
@@ -2100,14 +2113,13 @@ static ssize_t vfs_littlefs_pread(void *ctx, int fd, void *dst, size_t size, off
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if ((uint32_t)fd > efs->cache_size)
-    {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
 
     off_t old_offset = lfs_file_seek(efs->fs, &file->file, 0, SEEK_CUR);
     if (old_offset < (off_t)0)
@@ -2157,14 +2169,13 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-
-    file = efs->cache[fd];
 
 #if CONFIG_LITTLEFS_OPEN_DIR
     if ((file->file.flags & O_DIRECTORY) == 0) {
@@ -2217,13 +2228,13 @@ static off_t vfs_littlefs_lseek(void* ctx, int fd, off_t offset, int mode) {
     }
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_file_seek(efs->fs, &file->file, offset, whence);
     sem_give(efs);
 
@@ -2250,13 +2261,13 @@ static int vfs_littlefs_fsync(void* ctx, int fd)
 
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = esp_littlefs_file_sync(efs, file);
     sem_give(efs);
 
@@ -2285,13 +2296,13 @@ static int vfs_littlefs_fstat(void* ctx, int fd, struct stat * st) {
     st->st_blksize = efs->cfg.block_size;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD must be <%d.", efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_stat(efs->fs, file->path, &info);
     if (res < 0) {
         errno = lfs_errno_remap(res);
@@ -2674,14 +2685,13 @@ static ssize_t vfs_littlefs_truncate( void *ctx, const char *path, off_t size )
     int fd = vfs_littlefs_open( ctx, path, LFS_O_RDWR, 438 );
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size)
-    {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_file_truncate( efs->fs, &file->file, size );
     sem_give(efs);
 
@@ -2713,13 +2723,13 @@ static int vfs_littlefs_ftruncate(void *ctx, int fd, off_t size)
     vfs_littlefs_file_t *file = NULL;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-    file = efs->cache[fd];
     res = lfs_file_truncate( efs->fs, &file->file, size );
     sem_give(efs);
 
@@ -2913,21 +2923,14 @@ static int vfs_littlefs_fcntl(void* ctx, int fd, int cmd, int arg)
     const uint32_t flags_mask = LFS_O_WRONLY | LFS_O_RDONLY | LFS_O_RDWR;
 
     sem_take(efs);
-    if((uint32_t)fd > efs->cache_size) {
+    file = esp_littlefs_get_file(efs, fd);
+    if(file == NULL) {
         sem_give(efs);
-        ESP_LOGE(ESP_LITTLEFS_TAG, "FD %d must be <%d.", fd, efs->cache_size);
+        ESP_LOGE(ESP_LITTLEFS_TAG, "Invalid FD %d.", fd);
         errno = EBADF;
         return -1;
     }
-
-    file = efs->cache[fd];
-    if (file) {
-        lfs_file = &efs->cache[fd]->file;
-    } else {
-        sem_give(efs);
-        errno = EBADF;
-        return -1;
-    }
+    lfs_file = &file->file;
 
     if (cmd == F_GETFL) {
         if ((lfs_file->flags & flags_mask) == LFS_O_WRONLY) {
