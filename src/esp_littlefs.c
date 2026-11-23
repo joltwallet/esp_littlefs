@@ -20,7 +20,7 @@
 #include <inttypes.h>
 #include <dirent.h>
 #include <sys/dirent.h>
-#include <sys/errno.h>
+#include <errno.h>
 #include <sys/fcntl.h>
 #include <sys/lock.h>
 #include <sys/param.h>
