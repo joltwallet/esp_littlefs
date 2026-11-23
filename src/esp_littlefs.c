@@ -2175,7 +2175,6 @@ static int vfs_littlefs_close(void* ctx, int fd) {
     res = lfs_file_close(efs->fs, &file->file);
     if(res < 0){
         errno = lfs_errno_remap(res);
-        sem_give(efs);
 #ifndef CONFIG_LITTLEFS_USE_ONLY_HASH
         ESP_LOGV(ESP_LITTLEFS_TAG, "Failed to close file \"%s\". Error %s (%d)",
                 file->path, esp_littlefs_errno(res), res);
@@ -2183,6 +2182,10 @@ static int vfs_littlefs_close(void* ctx, int fd) {
         ESP_LOGV(ESP_LITTLEFS_TAG, "Failed to close Fd %d. Error %s (%d)",
                 fd, esp_littlefs_errno(res), res);
 #endif
+        /* lfs_file_close() has released the file even on error, and the VFS
+         * has already dropped this fd, so free our record to avoid a leak. */
+        esp_littlefs_free_fd(efs, fd);
+        sem_give(efs);
         return -1;
     }
     // TODO: update directory containing file's mtime.
