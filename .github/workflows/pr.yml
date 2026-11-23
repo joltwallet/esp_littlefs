@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+  pull_request:  # any base branch, so stacked PRs get CI too
   schedule:
     - cron: "0 1 * * 6" # Every Saturday at 1AM
 
@@ -42,7 +40,13 @@ jobs:
 
       - name: Run cppcheck
         run: |
-          cppcheck src/*.c --enable=warning --error-exitcode=1 --force
+          # The esp_idf_version.h shim supplies the IDF version macros cppcheck can't
+          # resolve. The -U symbols are littlefs override hooks that the build never
+          # uses (it replaces lfs_util.h via LFS_CONFIG); --force would otherwise try
+          # configs that define them, which cppcheck >= 2.19 rejects as syntax errors.
+          cppcheck src/*.c --enable=warning --error-exitcode=1 --force \
+            --include=.github/cppcheck/esp_idf_version.h \
+            -ULFS_CRC -ULFS_MALLOC -ULFS_FREE
 
       - name: esp-idf build library
         uses: espressif/esp-idf-ci-action@main
